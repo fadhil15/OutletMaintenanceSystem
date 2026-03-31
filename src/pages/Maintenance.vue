@@ -120,6 +120,7 @@
                 <option>To Do</option>
                 <option>Sudah CO</option>
                 <option>Proses Pengerjaan</option>
+                <option>Pengerjaan Selesai</option>
               </select>
             </td>
             <td>
@@ -174,6 +175,7 @@
                 <option>To Do</option>
                 <option>Sudah CO</option>
                 <option>Proses Pengerjaan</option>
+                <option>Pengerjaan Selesai</option>
               </select>
             </div>
           </div>
@@ -233,12 +235,14 @@ const kanbanCols = [
   { status: 'To Do', color: '#6b7280' },
   { status: 'Sudah CO', color: '#d97706' },
   { status: 'Proses Pengerjaan', color: '#0057be' },
+  { status: 'Pengerjaan Selesai', color: '#059669' },
 ]
 
 const summaryCards = computed(() => [
   { label: 'To Do', value: store.maintenance.filter(m => m.status === 'To Do').length, color: '#6b7280' },
   { label: 'Sudah CO', value: store.maintenance.filter(m => m.status === 'Sudah CO').length, color: '#d97706' },
   { label: 'Proses Pengerjaan', value: store.maintenance.filter(m => m.status === 'Proses Pengerjaan').length, color: '#0057be' },
+  { label: 'Pengerjaan Selesai', value: store.maintenance.filter(m => m.status === 'Pengerjaan Selesai').length, color: '#059669' },
 ])
 
 const filteredMnt = computed(() => store.maintenance.filter(m =>
@@ -269,7 +273,7 @@ function ganttBarStyle(item) {
   const end = new Date(item.endDate)
   const left = Math.max(0, (start - ganttStart) / 86400000 / ganttTotalDays * 100)
   const width = Math.max(2, (end - start) / 86400000 / ganttTotalDays * 100)
-  const colors = { 'To Do': '#9ca3af', 'Sudah CO': '#d97706', 'Proses Pengerjaan': '#0057be' }
+  const colors = { 'To Do': '#9ca3af', 'Sudah CO': '#d97706', 'Proses Pengerjaan': '#0057be', 'Pengerjaan Selesai': '#059669' }
   return { left: left + '%', width: width + '%', background: colors[item.status] || '#9ca3af' }
 }
 
@@ -321,7 +325,7 @@ function deleteItem(id) {
 /* Summary */
 .mnt-summary {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
 }
 .mnt-summary-card {
@@ -378,7 +382,7 @@ function deleteItem(id) {
 /* Kanban */
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
   align-items: start;
 }

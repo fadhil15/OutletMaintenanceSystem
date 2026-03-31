@@ -3,7 +3,18 @@
     <div class="page-header">
       <div class="page-header-text">
         <h2>System Configuration</h2>
-        <p>Manage your data infrastructure connections. OMS v3.0 utilizes a spreadsheet-driven architecture for maximum flexibility.</p>
+        <p>Manage your data infrastructure connections. Outlet Maintenance System V3.0 utilizes a spreadsheet-driven architecture for maximum flexibility.</p>
+      </div>
+    </div>
+
+    <!-- About this app -->
+    <div class="card" style="margin-bottom: 2rem;">
+      <div class="card-header" style="border-bottom: 1px solid rgba(171,173,175,0.1); padding-bottom: 1rem; margin-bottom: 1rem;">
+        <h3>About This App</h3>
+      </div>
+      <div style="font-size: 0.875rem; color: var(--color-on-surface-variant); line-height: 1.6;">
+        <p style="margin-bottom: 0.75rem;"><strong>Outlet Maintenance System V3.0</strong> is an ecosystem orchestrating field operations, logistics, and database management specifically designed for <strong>PT Sedjahtera Boga Kreasi</strong>.</p>
+        <p>Created by the <strong>Business Development Team</strong> to ensure smooth and precision-curated handling of maintenance, cross-branch operations.</p>
       </div>
     </div>
 

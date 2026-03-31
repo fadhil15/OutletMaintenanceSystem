@@ -27,8 +27,8 @@
           <div class="name">Administrator</div>
           <div class="role">Profile Active</div>
         </div>
-        <div class="avatar">
-          <span class="material-symbols-outlined ms-filled" style="font-size: 1.25rem; color: var(--color-on-primary-container);">person</span>
+        <div class="avatar" @click="handleLogout" style="cursor: pointer;" title="Logout">
+          <span class="material-symbols-outlined ms-filled" style="font-size: 1.25rem; color: var(--color-on-primary-container);">logout</span>
         </div>
       </div>
     </div>
@@ -47,4 +47,14 @@ const props = defineProps({
 
 const emit = defineEmits(['search'])
 const searchQuery = ref('')
+
+import { useRouter } from 'vue-router'
+const router = useRouter()
+
+function handleLogout() {
+  if(confirm('Are you sure you want to log out?')) {
+    localStorage.removeItem('oms_auth_token')
+    router.push('/login')
+  }
+}
 </script>

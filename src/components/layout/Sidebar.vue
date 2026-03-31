@@ -6,8 +6,8 @@
         <span class="material-symbols-outlined ms-filled">inventory_2</span>
       </div>
       <div class="sidebar-brand-text">
-        <h1>OMS v3.0</h1>
-        <p>Precision Curator</p>
+        <h1 style="font-size: 0.8125rem; line-height: 1.25; font-weight: 800; white-space: normal;">Outlet Maintenance<br />System V3.0</h1>
+        <p style="font-size: 0.5625rem; white-space: nowrap; margin-top: 0.2rem; font-weight: 600; color: var(--color-on-surface-variant); letter-spacing: 0.02em;">PT Sedjahtera Boga Kreasi</p>
       </div>
     </div>
 

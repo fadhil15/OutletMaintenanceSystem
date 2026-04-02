@@ -19,33 +19,54 @@
         <div class="kpi-card-info">
           <h3>Status Tiket</h3>
           <div style="display: flex; align-items: baseline; gap: 0.375rem;">
-            <span class="value" style="color: var(--color-primary);">{{ store.chartData.tiketPct }}%</span>
-            <span class="label">Resolved</span>
+            <span class="value" style="color: var(--color-primary);">{{ tiketWeightedPct }}%</span>
+            <span class="label">Progress</span>
           </div>
           <div class="kpi-legend" style="margin-top: 0.75rem;">
             <div class="legend-item">
-              <span class="legend-dot" style="background: var(--color-primary);"></span>
-              <span>Selesai: {{ tiketSelesai }}</span>
+              <span class="legend-dot" style="background: #d97706;"></span>
+              <span>Pending: {{ tiketPending }}</span>
             </div>
             <div class="legend-item">
-              <span class="legend-dot" style="background: #d97706;"></span>
-              <span>Pending: {{ store.stats.tiketPending }}</span>
+              <span class="legend-dot" style="background: #0057be;"></span>
+              <span>Diproses: {{ tiketDiproses }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #059669;"></span>
+              <span>Selesai: {{ tiketSelesai }}</span>
             </div>
           </div>
         </div>
         <div class="donut-chart">
           <svg viewBox="0 0 100 100">
             <circle class="donut-track" cx="50" cy="50" r="40" />
+            <!-- Selesai segment (green, from top) -->
             <circle
               class="donut-fill"
               cx="50" cy="50" r="40"
-              :stroke="'#0057be'"
-              :stroke-dasharray="`${store.chartData.tiketPct * 2.513} 251.3`"
-              stroke-dashoffset="0"
+              stroke="#059669"
+              :stroke-dasharray="`${tiketSegments.selesai} 251.3`"
+              :stroke-dashoffset="0"
+            />
+            <!-- Diproses segment (blue, after selesai) -->
+            <circle
+              class="donut-fill"
+              cx="50" cy="50" r="40"
+              stroke="#0057be"
+              :stroke-dasharray="`${tiketSegments.diproses} 251.3`"
+              :stroke-dashoffset="-(tiketSegments.selesai)"
+            />
+            <!-- Pending segment (amber, after diproses) -->
+            <circle
+              class="donut-fill"
+              cx="50" cy="50" r="40"
+              stroke="#d97706"
+              :stroke-dasharray="`${tiketSegments.pending} 251.3`"
+              :stroke-dashoffset="-(tiketSegments.selesai + tiketSegments.diproses)"
             />
           </svg>
           <div class="donut-center">
-            <span class="pct" style="color: var(--color-primary);">{{ store.chartData.tiketPct }}%</span>
+            <span class="pct" style="color: var(--color-primary);">{{ tiketWeightedPct }}%</span>
           </div>
         </div>
       </div>
@@ -267,9 +288,31 @@ const store = useDataStore()
 
 const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
 
-// Computed helpers
+// Computed helpers for ticket status
+const tiketPending = computed(() => store.ticketing.filter(t => t.status === 'Pending').length)
+const tiketDiproses = computed(() => store.ticketing.filter(t => t.status === 'Sedang Diproses').length)
 const tiketSelesai = computed(() => store.ticketing.filter(t => t.status === 'Selesai').length)
 const pgdDiterima = computed(() => store.pengadaan.filter(p => p.status === 'Diterima Outlet').length)
+
+// Weighted progress: Pending=0pt, Diproses=0.5pt, Selesai=1pt
+const tiketWeightedPct = computed(() => {
+  const total = store.ticketing.length
+  if (total === 0) return 0
+  const score = tiketSelesai.value * 1 + tiketDiproses.value * 0.5
+  return Math.round((score / total) * 100)
+})
+
+// Arc lengths for 3-segment donut (circumference = 251.3)
+const tiketSegments = computed(() => {
+  const total = store.ticketing.length
+  if (total === 0) return { selesai: 0, diproses: 0, pending: 0 }
+  const C = 251.3
+  return {
+    selesai: Math.round((tiketSelesai.value / total) * C * 10) / 10,
+    diproses: Math.round((tiketDiproses.value / total) * C * 10) / 10,
+    pending: Math.round((tiketPending.value / total) * C * 10) / 10,
+  }
+})
 
 // Outlet distribution data
 const outletDistribution = computed(() => {

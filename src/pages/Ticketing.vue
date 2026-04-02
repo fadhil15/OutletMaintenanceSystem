@@ -44,8 +44,25 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="t in filtered" :key="t.id">
-            <td class="mono-cell">{{ t.id }}</td>
+          <tr
+            v-for="t in filtered"
+            :key="t.id"
+            :class="{ highlighted: highlightId === t.id }"
+            :ref="el => { if (highlightId === t.id) highlightRef = el }"
+          >
+            <td class="mono-cell">
+              <div style="display:flex; align-items:center; gap:0.375rem;">
+                {{ t.id }}
+                <span
+                  v-if="linkedPengadaan(t.id).length > 0"
+                  class="linked-badge"
+                  :title="'Terhubung ke ' + linkedPengadaan(t.id).length + ' pengadaan'"
+                >
+                  <span class="material-symbols-outlined" style="font-size:0.75rem;">local_shipping</span>
+                  {{ linkedPengadaan(t.id).length }}
+                </span>
+              </div>
+            </td>
             <td style="white-space: nowrap; color: var(--color-on-surface-variant); font-size: 0.75rem;">{{ formatDate(t.waktu) }}</td>
             <td style="font-weight: 600;">{{ t.outlet }}</td>
             <td>{{ t.barang }}</td>
@@ -141,19 +158,58 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
 
 const store = useDataStore()
+const route = useRoute()
 const search = ref('')
 const outletFilter = ref('Semua')
 const showModal = ref(false)
 const editingItem = ref(null)
 const form = ref({})
+const highlightId = ref(route.query.highlight || null)
+const highlightRef = ref(null)
 
 const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+
+// Scroll to highlighted row on mount
+onMounted(async () => {
+  if (highlightId.value) {
+    await nextTick()
+    setTimeout(() => {
+      if (highlightRef.value) {
+        highlightRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      // Clear highlight after 3 seconds
+      setTimeout(() => { highlightId.value = null }, 3000)
+    }, 300)
+  }
+})
+
+// Watch for route changes (if already on ticketing page)
+watch(() => route.query.highlight, async (val) => {
+  if (val) {
+    highlightId.value = val
+    await nextTick()
+    setTimeout(() => {
+      if (highlightRef.value) {
+        highlightRef.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      setTimeout(() => { highlightId.value = null }, 3000)
+    }, 100)
+  }
+})
+
+// Find pengadaan entries linked to a ticket
+function linkedPengadaan(ticketId) {
+  return store.pengadaan.filter(p => p.idTiket && p.idTiket.trim() === ticketId.trim())
+}
+
+
 
 const filtered = computed(() => store.ticketing.filter(t => {
   const q = search.value.toLowerCase()
@@ -205,4 +261,31 @@ function deleteItem(id) {
 .toolbar-search input { width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; background: var(--color-surface-container-highest); border: none; border-radius: 0.5rem; font-size: 0.875rem; font-family: var(--font-family-body); color: var(--color-on-surface); outline: none; }
 .photo-link { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--color-primary); text-decoration: none; font-weight: 600; }
 .photo-link:hover { text-decoration: underline; }
+
+.highlighted {
+  background: rgba(0, 87, 190, 0.08) !important;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 0.5rem;
+  animation: highlightFade 3s ease forwards;
+}
+@keyframes highlightFade {
+  0%, 50% { background: rgba(0, 87, 190, 0.12); }
+  100% { background: transparent; outline-color: transparent; }
+}
+
+.linked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  background: rgba(5, 150, 105, 0.12);
+  color: #059669;
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  border-radius: 9999px;
+  padding: 0.0625rem 0.375rem;
+  font-size: 0.625rem;
+  font-weight: 800;
+  cursor: default;
+  white-space: nowrap;
+}
 </style>

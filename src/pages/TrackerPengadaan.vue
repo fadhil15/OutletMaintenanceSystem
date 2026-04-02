@@ -40,7 +40,18 @@
         <tbody>
           <tr v-for="p in filtered" :key="p.id">
             <td class="mono-cell">{{ p.id }}</td>
-            <td class="mono-cell">{{ p.idTiket }}</td>
+            <td class="mono-cell">
+              <router-link
+                v-if="p.idTiket"
+                :to="{ path: '/ticketing', query: { highlight: p.idTiket } }"
+                class="tiket-link"
+                :title="'Lihat Tiket ' + p.idTiket"
+              >
+                <span class="material-symbols-outlined" style="font-size:0.8rem;">open_in_new</span>
+                {{ p.idTiket }}
+              </router-link>
+              <span v-else style="color: var(--color-on-surface-variant);">—</span>
+            </td>
             <td>{{ p.barang }}</td>
             <td style="font-weight: 600;">{{ p.outlet }}</td>
             <td style="color: var(--color-on-surface-variant); font-size: 0.75rem;">{{ formatDate(p.tglCO) }}</td>
@@ -77,7 +88,12 @@
             </div>
             <div class="form-group">
               <label class="form-label">ID Tiket Relasi</label>
-              <input class="form-input" v-model="form.idTiket" placeholder="TKT-XXXX-001" />
+              <select class="form-select form-input" v-model="form.idTiket">
+                <option value="">— Tidak ada relasi —</option>
+                <option v-for="t in store.ticketing" :key="t.id" :value="t.id">
+                  {{ t.id }} · {{ t.outlet }} · {{ t.barang }}
+                </option>
+              </select>
             </div>
           </div>
           <div class="form-group">
@@ -191,3 +207,20 @@ function deleteItem(id) {
 .toolbar-search .material-symbols-outlined { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--color-on-surface-variant); font-size: 1rem; }
 .toolbar-search input { width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; background: var(--color-surface-container-highest); border: none; border-radius: 0.5rem; font-size: 0.875rem; font-family: var(--font-family-body); color: var(--color-on-surface); outline: none; }
 </style>
+.tiket-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  background: rgba(0, 87, 190, 0.08);
+  transition: background 0.15s;
+}
+.tiket-link:hover {
+  background: rgba(0, 87, 190, 0.15);
+  text-decoration: none;
+}

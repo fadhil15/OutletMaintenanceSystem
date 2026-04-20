@@ -223,7 +223,7 @@ const showModal = ref(false)
 const editingItem = ref(null)
 const form = ref({})
 
-const CABANG = ['Cianjur', 'Cirebon', 'Gedebage', 'Kopo', 'Antapani', 'Arcamanik']
+const CABANG = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Suci', 'Kopo', 'Gedebage', 'Ayam Mirasa']
 
 const views = [
   { key: 'timeline', icon: 'calendar_month', label: 'Timeline' },

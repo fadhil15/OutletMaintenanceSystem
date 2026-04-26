@@ -46,6 +46,12 @@ const routes = [
     meta: { title: 'Maintenance & Bisdev — OMS V3.0' }
   },
   {
+    path: '/worklog',
+    name: 'Worklog',
+    component: () => import('@/pages/Worklog.vue'),
+    meta: { title: 'Worklog — OMS V3.0' }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('@/pages/Settings.vue'),

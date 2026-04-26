@@ -76,5 +76,6 @@ const navItems = [
   { name: 'TrackerPengadaan', path: '/tracker-pengadaan', icon: 'local_shipping', label: 'Tracker Pengadaan' },
   { name: 'DatabaseOutlet', path: '/database-outlet', icon: 'storefront', label: 'Database Outlet' },
   { name: 'Maintenance', path: '/maintenance', icon: 'build', label: 'Maintenance & Bisdev' },
+  { name: 'Worklog', path: '/worklog', icon: 'edit_note', label: '📝 Worklog' },
 ]
 </script>

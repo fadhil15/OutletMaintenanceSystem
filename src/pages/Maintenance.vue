@@ -116,7 +116,7 @@
             <td style="color: var(--color-on-surface-variant); font-size: 0.75rem;">{{ formatDate(m.endDate) }}</td>
             <td style="font-size: 0.8125rem;">{{ m.pic }}</td>
             <td>
-              <select class="inline-select" v-model="m.status" @change="onStatusChange(m)">
+              <select class="inline-select" :value="m.status" @change="e => { const old = m.status; m.status = e.target.value; onStatusChange(m, old) }">
                 <option>To Do</option>
                 <option>Sudah CO</option>
                 <option>Proses Pengerjaan</option>
@@ -211,12 +211,15 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
+import { useWorklog } from '@/composables/useWorklog'
 
 const store = useDataStore()
+const { createAutoWorklog } = useWorklog()
+const addToast = inject('addToast', () => {})
 const cabangFilter = ref('Semua')
 const activeView = ref('kanban')
 const showModal = ref(false)
@@ -279,13 +282,27 @@ function ganttBarStyle(item) {
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : '—' }
 
-function onStatusChange(item) {
+function onStatusChange(item, oldStatus) {
   store.sendToAppsScript({
     action: 'update',
     sheet: 'maintenance',
     data: [item.id, item.cabang, item.kategori, item.pekerjaan, item.status, item.startDate, item.endDate, item.pic],
     rowId: item.id
   })
+  // Auto worklog — guard: don't log if status unchanged
+  if (oldStatus && oldStatus !== item.status) {
+    createAutoWorklog({
+      tipeAktivitas: 'Update Status',
+      modulTerkait: 'Maintenance',
+      referensiId: item.id,
+      outletCabang: item.cabang,
+      judulAktivitas: 'Status maintenance berubah',
+      catatanDetail: `Status berubah dari ${oldStatus} menjadi ${item.status} untuk pekerjaan ${item.pekerjaan}`,
+      pic: item.pic || '',
+      prioritas: 'Medium',
+      statusFollowUp: 'Open'
+    })
+  }
 }
 
 function openModal(item = null) {
@@ -308,6 +325,20 @@ function saveItem() {
     data: [form.value.id, form.value.cabang, form.value.kategori, form.value.pekerjaan, form.value.status, form.value.startDate, form.value.endDate, form.value.pic],
     rowId: isEditing ? editingItem.value.id : null
   })
+  // Auto worklog for new maintenance
+  if (!isEditing) {
+    createAutoWorklog({
+      tipeAktivitas: 'Maintenance',
+      modulTerkait: 'Maintenance',
+      referensiId: form.value.id,
+      outletCabang: form.value.cabang,
+      judulAktivitas: 'Pekerjaan maintenance baru dibuat',
+      catatanDetail: `Pekerjaan: ${form.value.pekerjaan}\nKategori: ${form.value.kategori}\nStart: ${form.value.startDate || '-'}\nEnd: ${form.value.endDate || '-'}`,
+      pic: form.value.pic || '',
+      prioritas: 'Medium',
+      statusFollowUp: 'Open'
+    })
+  }
   showModal.value = false
 }
 function deleteItem(id) {

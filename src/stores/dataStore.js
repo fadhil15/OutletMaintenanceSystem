@@ -1,12 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { mapRowToWorklog } from '@/utils/worklogHelpers'
+import { WORKLOG_SHEET_CONFIG } from '@/constants/worklog'
 
 export const useDataStore = defineStore('data', () => {
   // Connection state
   const sheetsUrl = ref(localStorage.getItem('oms_sheets_url') || 'https://docs.google.com/spreadsheets/d/1X4o9LeUKI9fh4i5SSOSVnGzuZJCQpR20YRkToAvRrhQ/edit?usp=sharing')
   const crudUrl = ref(localStorage.getItem('oms_crud_url') || 'https://script.google.com/macros/s/AKfycbxG0XFL61JB9XNhOUUbS4En0AlYeAURXcHfLKhYaA2bqHL-4cMsXe2WiXA-31i1oeRE/exec')
+  const worklogApiUrl = ref(localStorage.getItem('oms_worklog_url') || '')
   const sheetsConnected = ref(false)
   const crudConnected = ref(true) // Default true as per user request
+  const worklogConnected = ref(!!localStorage.getItem('oms_worklog_url'))
   const isLoading = ref(false)
 
   // Data arrays
@@ -15,6 +19,8 @@ export const useDataStore = defineStore('data', () => {
   const pengadaan = ref([])
   const dbOutlet = ref([])
   const maintenance = ref([])
+  const worklog = ref([])
+  const worklogError = ref(null)
 
   // Computed stats
   const stats = computed(() => ({
@@ -118,12 +124,13 @@ export const useDataStore = defineStore('data', () => {
 
     isLoading.value = true
     try {
-      const [mLink, tkt, pgd, dbOut, mnt] = await Promise.all([
+      const [mLink, tkt, pgd, dbOut, mnt, wlog] = await Promise.all([
         fetchSheetJSONP(sid, '1. Master Link CO').catch(e => { console.warn(e); return null; }),
         fetchSheetJSONP(sid, '2. Ticketing').catch(e => { console.warn(e); return null; }),
         fetchSheetJSONP(sid, '3. Tracker Pengadaan').catch(e => { console.warn(e); return null; }),
         fetchSheetJSONP(sid, '4. Database Outlet').catch(e => { console.warn(e); return null; }),
-        fetchSheetJSONP(sid, '5. Maintenance').catch(e => { console.warn(e); return null; })
+        fetchSheetJSONP(sid, '5. Maintenance').catch(e => { console.warn(e); return null; }),
+        fetchSheetJSONP(sid, WORKLOG_SHEET_CONFIG.name).catch(e => { console.warn(e); return null; })
       ])
 
       if (mLink) {
@@ -163,6 +170,11 @@ export const useDataStore = defineStore('data', () => {
         }))
       }
 
+      if (wlog) {
+        worklog.value = parseGVizTable(wlog).map(r => mapRowToWorklog(r))
+        worklogError.value = null
+      }
+
       sheetsConnected.value = true
     } catch (e) {
       console.error(e)
@@ -197,15 +209,124 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
+  // ─── WORKLOG API ───
+  function connectWorklogApi(url) {
+    if (!url) return
+    worklogApiUrl.value = url
+    localStorage.setItem('oms_worklog_url', url)
+    worklogConnected.value = true
+  }
+
+  /**
+   * Send a POST request to the dedicated Worklog Apps Script endpoint.
+   * Returns the parsed JSON response or null on failure.
+   */
+  async function sendToWorklogApi(payload) {
+    if (!worklogConnected.value || !worklogApiUrl.value) {
+      console.warn('[Worklog API] Endpoint belum dikonfigurasi')
+      return null
+    }
+    try {
+      const resp = await fetch(worklogApiUrl.value, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      })
+      return true
+    } catch (e) {
+      console.error('[Worklog API] Request Failed:', e)
+      return null
+    }
+  }
+
+  // ─── WORKLOG STANDALONE FETCH ───
+  async function fetchWorklog() {
+    worklogError.value = null
+    isLoading.value = true
+
+    // Method 1: Dedicated Worklog API endpoint (preferred)
+    if (worklogConnected.value && worklogApiUrl.value) {
+      try {
+        const url = `${worklogApiUrl.value}?action=getWorklogs`
+        const resp = await fetch(url)
+        const json = await resp.json()
+        if (json && json.data && Array.isArray(json.data)) {
+          worklog.value = json.data.map(row => ({
+            idLog:           row['ID Log'] || row.idLog || '',
+            tanggal:         row['Tanggal'] || row.tanggal || '',
+            waktu:           row['Waktu'] || row.waktu || '',
+            tipeAktivitas:   row['Tipe Aktivitas'] || row.tipeAktivitas || '',
+            modulTerkait:    row['Modul Terkait'] || row.modulTerkait || '',
+            referensiId:     row['Referensi ID'] || row.referensiId || '',
+            outletCabang:    row['Outlet/Cabang'] || row.outletCabang || '',
+            judulAktivitas:  row['Judul Aktivitas'] || row.judulAktivitas || '',
+            catatanDetail:   row['Catatan Detail'] || row.catatanDetail || '',
+            pic:             row['PIC'] || row.pic || '',
+            prioritas:       row['Prioritas'] || row.prioritas || 'Medium',
+            statusFollowUp:  row['Status Follow Up'] || row.statusFollowUp || 'Open',
+            tanggalFollowUp: row['Tanggal Follow Up'] || row.tanggalFollowUp || '',
+            createdBy:       row['Created By'] || row.createdBy || ''
+          }))
+        } else if (json && Array.isArray(json)) {
+          // If API returns flat array
+          worklog.value = json.map(row => ({
+            idLog:           row['ID Log'] || row.idLog || '',
+            tanggal:         row['Tanggal'] || row.tanggal || '',
+            waktu:           row['Waktu'] || row.waktu || '',
+            tipeAktivitas:   row['Tipe Aktivitas'] || row.tipeAktivitas || '',
+            modulTerkait:    row['Modul Terkait'] || row.modulTerkait || '',
+            referensiId:     row['Referensi ID'] || row.referensiId || '',
+            outletCabang:    row['Outlet/Cabang'] || row.outletCabang || '',
+            judulAktivitas:  row['Judul Aktivitas'] || row.judulAktivitas || '',
+            catatanDetail:   row['Catatan Detail'] || row.catatanDetail || '',
+            pic:             row['PIC'] || row.pic || '',
+            prioritas:       row['Prioritas'] || row.prioritas || 'Medium',
+            statusFollowUp:  row['Status Follow Up'] || row.statusFollowUp || 'Open',
+            tanggalFollowUp: row['Tanggal Follow Up'] || row.tanggalFollowUp || '',
+            createdBy:       row['Created By'] || row.createdBy || ''
+          }))
+        }
+        console.log(`[Worklog API] Fetched ${worklog.value.length} entries`)
+      } catch (e) {
+        console.error('[Worklog API] Fetch failed:', e)
+        worklogError.value = e.message || 'Gagal memuat data worklog dari API'
+      } finally {
+        isLoading.value = false
+      }
+      return
+    }
+
+    // Method 2: Fallback — Google Sheets JSONP
+    const sid = extractSpreadsheetId(sheetsUrl.value)
+    if (!sid) {
+      isLoading.value = false
+      return
+    }
+    try {
+      const wlog = await fetchSheetJSONP(sid, WORKLOG_SHEET_CONFIG.name)
+      if (wlog) {
+        worklog.value = parseGVizTable(wlog).map(r => mapRowToWorklog(r))
+      }
+    } catch (e) {
+      console.error('Gagal fetch worklog:', e)
+      worklogError.value = e.message || 'Gagal memuat data worklog'
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   function formatRupiah(num) {
     if (!num) return '0'
     return new Intl.NumberFormat('id-ID').format(num)
   }
 
   return {
-    sheetsUrl, crudUrl, sheetsConnected, crudConnected, isLoading,
+    sheetsUrl, crudUrl, worklogApiUrl, sheetsConnected, crudConnected, worklogConnected, isLoading,
     masterLink, ticketing, pengadaan, dbOutlet, maintenance,
+    worklog, worklogError,
     stats, chartData, recentTickets,
-    connectSheets, connectCrud, formatRupiah, sendToAppsScript
+    connectSheets, connectCrud, connectWorklogApi, formatRupiah, sendToAppsScript, sendToWorklogApi,
+    fetchWorklog
   }
 })

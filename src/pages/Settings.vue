@@ -69,6 +69,31 @@
           Connect Web App
         </button>
       </div>
+
+      <!-- Worklog API -->
+      <div class="settings-card">
+        <div class="settings-card-status" :class="store.worklogConnected ? 'connected' : 'disconnected'">
+          <span class="status-dot"></span>
+          {{ store.worklogConnected ? 'Connected' : 'Disconnected' }}
+        </div>
+        <div class="settings-card-header">
+          <div class="settings-icon" style="color: #d97706;">
+            <span class="material-symbols-outlined" style="font-size: 1.75rem;">edit_note</span>
+          </div>
+          <div>
+            <h3>Worklog API (Apps Script)</h3>
+            <p>Dedicated endpoint for worklog CRUD operations.</p>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label">Worklog Web App URL</label>
+          <input class="form-input font-mono" v-model="worklogInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+        </div>
+        <button class="btn-dark" @click="connectWorklog">
+          <span class="material-symbols-outlined">link</span>
+          Connect Worklog API
+        </button>
+      </div>
     </div>
 
     <!-- Connection Integrity Report -->
@@ -136,6 +161,7 @@ import { useDataStore } from '@/stores/dataStore'
 const store = useDataStore()
 const sheetsInput = ref(store.sheetsUrl)
 const crudInput = ref(store.crudUrl)
+const worklogInput = ref(store.worklogApiUrl)
 const diagRunning = ref(false)
 
 const sheetNodes = ref([
@@ -144,6 +170,7 @@ const sheetNodes = ref([
   { name: 'Tracker Sheet', icon: 'local_shipping', lastSync: '2026-03-30 14:15:22', latency: '210ms', ok: true },
   { name: 'DB Outlet Sheet', icon: 'storefront', lastSync: '2026-03-30 14:19:30', latency: '156ms', ok: true },
   { name: 'Maintenance Sheet', icon: 'build', lastSync: '2026-03-30 14:20:05', latency: '165ms', ok: true },
+  { name: 'Worklog Sheet', icon: 'edit_note', lastSync: '—', latency: '—', ok: !!store.worklogApiUrl },
 ])
 
 function connectSheets() {
@@ -156,6 +183,12 @@ function connectCrud() {
   if (!crudInput.value) return
   store.connectCrud(crudInput.value)
   alert('CRUD API Connected!\n\nPastikan deploy Apps Script: Execute as Me → Anyone')
+}
+
+function connectWorklog() {
+  if (!worklogInput.value) return
+  store.connectWorklogApi(worklogInput.value)
+  alert('Worklog API Connected!\n\nEndpoint khusus worklog berhasil dihubungkan.')
 }
 
 function runDiagnostics() {
@@ -173,11 +206,13 @@ function runDiagnostics() {
 function discardChanges() {
   sheetsInput.value = store.sheetsUrl
   crudInput.value = store.crudUrl
+  worklogInput.value = store.worklogApiUrl
 }
 
 function applyConfig() {
   if (sheetsInput.value) store.connectSheets(sheetsInput.value)
   if (crudInput.value) store.connectCrud(crudInput.value)
+  if (worklogInput.value) store.connectWorklogApi(worklogInput.value)
   alert('Configuration applied!')
 }
 </script>
@@ -185,7 +220,7 @@ function applyConfig() {
 <style scoped>
 .settings-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 1.5rem;
 }
 .settings-card {

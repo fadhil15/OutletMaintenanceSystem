@@ -145,12 +145,15 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
+import { useWorklog } from '@/composables/useWorklog'
 
 const store = useDataStore()
+const { createAutoWorklog } = useWorklog()
+const addToast = inject('addToast', () => {})
 const search = ref('')
 const outletFilter = ref('Semua')
 const showModal = ref(false)
@@ -176,6 +179,7 @@ function openModal(item = null) {
 }
 function saveItem() {
   const isEditing = !!editingItem.value
+  const oldStatus = isEditing ? editingItem.value.status : null
   if (isEditing) {
     const idx = store.pengadaan.findIndex(i => i.id === editingItem.value.id)
     if (idx !== -1) store.pengadaan[idx] = { ...form.value }
@@ -188,6 +192,46 @@ function saveItem() {
     data: [form.value.id, form.value.idTiket, form.value.barang, form.value.outlet, form.value.tglCO, form.value.resi, form.value.estimasi, form.value.status],
     rowId: isEditing ? editingItem.value.id : null
   })
+  // Auto worklog — new pengadaan
+  if (!isEditing) {
+    createAutoWorklog({
+      tipeAktivitas: 'Pengadaan',
+      modulTerkait: 'Pengadaan',
+      referensiId: form.value.id,
+      outletCabang: form.value.outlet,
+      judulAktivitas: 'Pengadaan baru dibuat',
+      catatanDetail: `Barang: ${form.value.barang}\nID Tiket: ${form.value.idTiket || '-'}\nTanggal CO: ${form.value.tglCO || '-'}`,
+      prioritas: 'Medium',
+      statusFollowUp: 'Open'
+    })
+  }
+  // Auto worklog — status Dikirim (guard: old !== Dikirim)
+  if (isEditing && form.value.status === 'Dikirim' && oldStatus !== 'Dikirim') {
+    createAutoWorklog({
+      tipeAktivitas: 'Pengadaan',
+      modulTerkait: 'Pengadaan',
+      referensiId: form.value.id,
+      outletCabang: form.value.outlet,
+      judulAktivitas: 'Barang dikirim',
+      catatanDetail: `Barang ${form.value.barang} dikirim ke ${form.value.outlet}. Resi: ${form.value.resi || '-'}. Estimasi tiba: ${form.value.estimasi || '-'}.`,
+      prioritas: 'High',
+      statusFollowUp: 'Open',
+      tanggalFollowUp: form.value.estimasi || ''
+    })
+  }
+  // Auto worklog — status Diterima Outlet (guard: old !== Diterima Outlet)
+  if (isEditing && form.value.status === 'Diterima Outlet' && oldStatus !== 'Diterima Outlet') {
+    createAutoWorklog({
+      tipeAktivitas: 'Pengadaan',
+      modulTerkait: 'Pengadaan',
+      referensiId: form.value.id,
+      outletCabang: form.value.outlet,
+      judulAktivitas: 'Barang diterima outlet',
+      catatanDetail: `Barang ${form.value.barang} sudah diterima oleh outlet ${form.value.outlet}.`,
+      prioritas: 'Medium',
+      statusFollowUp: 'Done'
+    })
+  }
   showModal.value = false
 }
 function deleteItem(id) {

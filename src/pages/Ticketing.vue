@@ -158,14 +158,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
+import { useWorklog } from '@/composables/useWorklog'
 
 const store = useDataStore()
 const route = useRoute()
+const { createAutoWorklog } = useWorklog()
+const addToast = inject('addToast', () => {})
 const search = ref('')
 const outletFilter = ref('Semua')
 const showModal = ref(false)
@@ -229,6 +232,7 @@ function openModal(item = null) {
 }
 function saveItem() {
   const isEditing = !!editingItem.value
+  const oldStatus = isEditing ? editingItem.value.status : null
   if (isEditing) {
     const idx = store.ticketing.findIndex(i => i.id === editingItem.value.id)
     if (idx !== -1) store.ticketing[idx] = { ...form.value }
@@ -241,6 +245,34 @@ function saveItem() {
     data: [form.value.id, form.value.waktu, form.value.outlet, form.value.barang, form.value.kendala, form.value.foto, form.value.linkCO, form.value.status, form.value.pic],
     rowId: isEditing ? editingItem.value.id : null
   })
+  // Auto worklog — new ticket
+  if (!isEditing) {
+    createAutoWorklog({
+      tipeAktivitas: 'Ticketing',
+      modulTerkait: 'Ticketing',
+      referensiId: form.value.id,
+      outletCabang: form.value.outlet,
+      judulAktivitas: 'Tiket baru dibuat',
+      catatanDetail: `Barang: ${form.value.barang}\nKendala: ${form.value.kendala || '-'}`,
+      pic: form.value.pic || '',
+      prioritas: form.value.status === 'Pending' ? 'High' : 'Medium',
+      statusFollowUp: 'Open'
+    })
+  }
+  // Auto worklog — ticket completed (guard: old !== new)
+  if (isEditing && form.value.status === 'Selesai' && oldStatus !== 'Selesai') {
+    createAutoWorklog({
+      tipeAktivitas: 'Update Status',
+      modulTerkait: 'Ticketing',
+      referensiId: form.value.id,
+      outletCabang: form.value.outlet,
+      judulAktivitas: 'Tiket diselesaikan',
+      catatanDetail: `Tiket ${form.value.id} untuk ${form.value.barang} sudah diselesaikan.`,
+      pic: form.value.pic || '',
+      prioritas: 'Medium',
+      statusFollowUp: 'Done'
+    })
+  }
   showModal.value = false
 }
 function deleteItem(id) {

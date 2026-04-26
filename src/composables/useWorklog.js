@@ -2,12 +2,12 @@
  * Composable: useWorklog
  *
  * Provides reactive state and CRUD operations for the Worklog module.
- * Uses a dedicated Apps Script Web App endpoint for worklog operations.
- * Falls back to the generic CRUD endpoint if the dedicated one is not configured.
+ * Menggunakan CRUD Apps Script endpoint yang sama dengan modul lain.
+ * Payload menggunakan action names: addWorklog, updateWorklog, deleteWorklog, markWorklogDone
  */
 import { computed } from 'vue'
 import { useDataStore } from '@/stores/dataStore'
-import { generateWorklogId, mapWorklogToRow, createEmptyWorklog, getTodayFocusWorklogs } from '@/utils/worklogHelpers'
+import { generateWorklogId, createEmptyWorklog, getTodayFocusWorklogs } from '@/utils/worklogHelpers'
 
 export function useWorklog() {
   const store = useDataStore()
@@ -23,34 +23,24 @@ export function useWorklog() {
     await store.fetchWorklog()
   }
 
-  // ─── Internal: build worklog payload object ───
-  function buildWorklogPayload(worklog) {
+  // ─── Build payload object dengan key nama kolom sheet ───
+  function buildPayload(worklog) {
     return {
-      'ID Log':           worklog.idLog,
-      'Tanggal':          worklog.tanggal,
-      'Waktu':            worklog.waktu,
-      'Tipe Aktivitas':   worklog.tipeAktivitas,
-      'Modul Terkait':    worklog.modulTerkait,
-      'Referensi ID':     worklog.referensiId,
-      'Outlet/Cabang':    worklog.outletCabang,
-      'Judul Aktivitas':  worklog.judulAktivitas,
-      'Catatan Detail':   worklog.catatanDetail,
-      'PIC':              worklog.pic,
-      'Prioritas':        worklog.prioritas,
-      'Status Follow Up': worklog.statusFollowUp,
+      'ID Log':            worklog.idLog,
+      'Tanggal':           worklog.tanggal,
+      'Waktu':             worklog.waktu,
+      'Tipe Aktivitas':    worklog.tipeAktivitas,
+      'Modul Terkait':     worklog.modulTerkait,
+      'Referensi ID':      worklog.referensiId,
+      'Outlet/Cabang':     worklog.outletCabang,
+      'Judul Aktivitas':   worklog.judulAktivitas,
+      'Catatan Detail':    worklog.catatanDetail,
+      'PIC':               worklog.pic,
+      'Prioritas':         worklog.prioritas,
+      'Status Follow Up':  worklog.statusFollowUp,
       'Tanggal Follow Up': worklog.tanggalFollowUp,
-      'Created By':       worklog.createdBy
+      'Created By':        worklog.createdBy
     }
-  }
-
-  // ─── Internal: send to the appropriate endpoint ───
-  async function sendWorklogRequest(payload) {
-    // Prefer dedicated Worklog API
-    if (store.worklogConnected && store.worklogApiUrl) {
-      return await store.sendToWorklogApi(payload)
-    }
-    // Fallback: generic CRUD endpoint
-    return await store.sendToAppsScript(payload)
   }
 
   // ─── Add ───
@@ -71,10 +61,10 @@ export function useWorklog() {
     // Optimistic update
     store.worklog.push(worklog)
 
-    // Persist via dedicated endpoint or fallback
-    const success = await sendWorklogRequest({
+    // POST ke CRUD Apps Script dengan action "addWorklog"
+    const success = await store.sendToAppsScript({
       action: 'addWorklog',
-      data: buildWorklogPayload(worklog)
+      data: buildPayload(worklog)
     })
 
     return { success, worklog }
@@ -90,10 +80,10 @@ export function useWorklog() {
     // Optimistic update
     store.worklog[idx] = updated
 
-    const success = await sendWorklogRequest({
+    const success = await store.sendToAppsScript({
       action: 'updateWorklog',
       idLog,
-      data: buildWorklogPayload(updated)
+      data: buildPayload(updated)
     })
 
     return { success, worklog: updated }
@@ -107,7 +97,7 @@ export function useWorklog() {
     // Optimistic update
     store.worklog.splice(idx, 1)
 
-    const success = await sendWorklogRequest({
+    const success = await store.sendToAppsScript({
       action: 'deleteWorklog',
       idLog
     })
@@ -123,7 +113,7 @@ export function useWorklog() {
       store.worklog[idx] = { ...store.worklog[idx], statusFollowUp: 'Done' }
     }
 
-    const success = await sendWorklogRequest({
+    const success = await store.sendToAppsScript({
       action: 'markWorklogDone',
       idLog
     })
@@ -131,43 +121,29 @@ export function useWorklog() {
     return { success }
   }
 
-  // ─── Auto Worklog ───
+  // ─── Auto Worklog (dari modul lain) ───
   /**
-   * Create an auto-generated worklog entry from another module.
-   * This is fire-and-forget: failures are logged but do NOT block the caller.
-   *
-   * @param {Object} params
-   * @param {string} params.tipeAktivitas
-   * @param {string} params.modulTerkait
-   * @param {string} [params.referensiId]
-   * @param {string} [params.outletCabang]
-   * @param {string} params.judulAktivitas
-   * @param {string} [params.catatanDetail]
-   * @param {string} [params.pic]
-   * @param {string} [params.prioritas='Medium']
-   * @param {string} [params.statusFollowUp='Open']
-   * @param {string} [params.tanggalFollowUp]
-   * @param {string} [params.createdBy='System']
+   * Buat log otomatis dari modul lain (Maintenance, Ticketing, Pengadaan).
+   * Fire-and-forget: error tidak memblokir operasi utama.
    */
   async function createAutoWorklog(params) {
     try {
-      const payload = {
-        tipeAktivitas: params.tipeAktivitas || '',
-        modulTerkait: params.modulTerkait || '',
-        referensiId: params.referensiId || '',
-        outletCabang: params.outletCabang || '',
-        judulAktivitas: params.judulAktivitas || '',
-        catatanDetail: params.catatanDetail || '',
-        pic: params.pic || '',
-        prioritas: params.prioritas || 'Medium',
-        statusFollowUp: params.statusFollowUp || 'Open',
+      await addWorklog({
+        tipeAktivitas:   params.tipeAktivitas || '',
+        modulTerkait:    params.modulTerkait || '',
+        referensiId:     params.referensiId || '',
+        outletCabang:    params.outletCabang || '',
+        judulAktivitas:  params.judulAktivitas || '',
+        catatanDetail:   params.catatanDetail || '',
+        pic:             params.pic || '',
+        prioritas:       params.prioritas || 'Medium',
+        statusFollowUp:  params.statusFollowUp || 'Open',
         tanggalFollowUp: params.tanggalFollowUp || '',
-        createdBy: params.createdBy || 'System'
-      }
-      await addWorklog(payload)
+        createdBy:       params.createdBy || 'System'
+      })
     } catch (e) {
-      console.error('[AutoWorklog] Gagal membuat auto log:', e)
-      // Silently fail — main operation must not be blocked
+      console.error('[AutoWorklog] Gagal:', e)
+      // Silently fail — operasi utama tidak boleh terganggu
     }
   }
 

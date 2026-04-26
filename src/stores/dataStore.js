@@ -7,10 +7,8 @@ export const useDataStore = defineStore('data', () => {
   // Connection state
   const sheetsUrl = ref(localStorage.getItem('oms_sheets_url') || 'https://docs.google.com/spreadsheets/d/1X4o9LeUKI9fh4i5SSOSVnGzuZJCQpR20YRkToAvRrhQ/edit?usp=sharing')
   const crudUrl = ref(localStorage.getItem('oms_crud_url') || 'https://script.google.com/macros/s/AKfycbxG0XFL61JB9XNhOUUbS4En0AlYeAURXcHfLKhYaA2bqHL-4cMsXe2WiXA-31i1oeRE/exec')
-  const worklogApiUrl = ref(localStorage.getItem('oms_worklog_url') || '')
   const sheetsConnected = ref(false)
   const crudConnected = ref(true) // Default true as per user request
-  const worklogConnected = ref(!!localStorage.getItem('oms_worklog_url'))
   const isLoading = ref(false)
 
   // Data arrays
@@ -209,110 +207,66 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
-  // ─── WORKLOG API ───
-  function connectWorklogApi(url) {
-    if (!url) return
-    worklogApiUrl.value = url
-    localStorage.setItem('oms_worklog_url', url)
-    worklogConnected.value = true
-  }
-
-  /**
-   * Send a POST request to the dedicated Worklog Apps Script endpoint.
-   * Returns the parsed JSON response or null on failure.
-   */
-  async function sendToWorklogApi(payload) {
-    if (!worklogConnected.value || !worklogApiUrl.value) {
-      console.warn('[Worklog API] Endpoint belum dikonfigurasi')
-      return null
-    }
-    try {
-      const resp = await fetch(worklogApiUrl.value, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
-      })
-      return true
-    } catch (e) {
-      console.error('[Worklog API] Request Failed:', e)
-      return null
-    }
-  }
-
-  // ─── WORKLOG STANDALONE FETCH ───
+  // ─── WORKLOG FETCH ───
+  // Menggunakan CRUD endpoint yang sama dengan ?action=getWorklogs
+  // Fallback ke Google Sheets JSONP jika CRUD tidak terkonfigurasi
   async function fetchWorklog() {
     worklogError.value = null
     isLoading.value = true
 
-    // Method 1: Dedicated Worklog API endpoint (preferred)
-    if (worklogConnected.value && worklogApiUrl.value) {
+    // Method 1: CRUD endpoint (sama dengan endpoint modul lain)
+    if (crudConnected.value && crudUrl.value) {
       try {
-        const url = `${worklogApiUrl.value}?action=getWorklogs`
+        const url = `${crudUrl.value}?action=getWorklogs`
         const resp = await fetch(url)
         const json = await resp.json()
-        if (json && json.data && Array.isArray(json.data)) {
-          worklog.value = json.data.map(row => ({
-            idLog:           row['ID Log'] || row.idLog || '',
-            tanggal:         row['Tanggal'] || row.tanggal || '',
-            waktu:           row['Waktu'] || row.waktu || '',
-            tipeAktivitas:   row['Tipe Aktivitas'] || row.tipeAktivitas || '',
-            modulTerkait:    row['Modul Terkait'] || row.modulTerkait || '',
-            referensiId:     row['Referensi ID'] || row.referensiId || '',
-            outletCabang:    row['Outlet/Cabang'] || row.outletCabang || '',
-            judulAktivitas:  row['Judul Aktivitas'] || row.judulAktivitas || '',
-            catatanDetail:   row['Catatan Detail'] || row.catatanDetail || '',
-            pic:             row['PIC'] || row.pic || '',
-            prioritas:       row['Prioritas'] || row.prioritas || 'Medium',
-            statusFollowUp:  row['Status Follow Up'] || row.statusFollowUp || 'Open',
-            tanggalFollowUp: row['Tanggal Follow Up'] || row.tanggalFollowUp || '',
-            createdBy:       row['Created By'] || row.createdBy || ''
+        const rows = json.data || (Array.isArray(json) ? json : null)
+        if (rows) {
+          worklog.value = rows.map(row => ({
+            idLog:           row['ID Log'] || '',
+            tanggal:         row['Tanggal'] || '',
+            waktu:           row['Waktu'] || '',
+            tipeAktivitas:   row['Tipe Aktivitas'] || '',
+            modulTerkait:    row['Modul Terkait'] || '',
+            referensiId:     row['Referensi ID'] || '',
+            outletCabang:    row['Outlet/Cabang'] || '',
+            judulAktivitas:  row['Judul Aktivitas'] || '',
+            catatanDetail:   row['Catatan Detail'] || '',
+            pic:             row['PIC'] || '',
+            prioritas:       row['Prioritas'] || 'Medium',
+            statusFollowUp:  row['Status Follow Up'] || 'Open',
+            tanggalFollowUp: row['Tanggal Follow Up'] || '',
+            createdBy:       row['Created By'] || ''
           }))
-        } else if (json && Array.isArray(json)) {
-          // If API returns flat array
-          worklog.value = json.map(row => ({
-            idLog:           row['ID Log'] || row.idLog || '',
-            tanggal:         row['Tanggal'] || row.tanggal || '',
-            waktu:           row['Waktu'] || row.waktu || '',
-            tipeAktivitas:   row['Tipe Aktivitas'] || row.tipeAktivitas || '',
-            modulTerkait:    row['Modul Terkait'] || row.modulTerkait || '',
-            referensiId:     row['Referensi ID'] || row.referensiId || '',
-            outletCabang:    row['Outlet/Cabang'] || row.outletCabang || '',
-            judulAktivitas:  row['Judul Aktivitas'] || row.judulAktivitas || '',
-            catatanDetail:   row['Catatan Detail'] || row.catatanDetail || '',
-            pic:             row['PIC'] || row.pic || '',
-            prioritas:       row['Prioritas'] || row.prioritas || 'Medium',
-            statusFollowUp:  row['Status Follow Up'] || row.statusFollowUp || 'Open',
-            tanggalFollowUp: row['Tanggal Follow Up'] || row.tanggalFollowUp || '',
-            createdBy:       row['Created By'] || row.createdBy || ''
-          }))
+          console.log(`[Worklog] Fetched ${worklog.value.length} entries via CRUD API`)
         }
-        console.log(`[Worklog API] Fetched ${worklog.value.length} entries`)
       } catch (e) {
-        console.error('[Worklog API] Fetch failed:', e)
-        worklogError.value = e.message || 'Gagal memuat data worklog dari API'
+        console.warn('[Worklog] CRUD fetch gagal, fallback ke JSONP:', e)
+        // Jika gagal (mis. CORS), lanjut ke fallback
+        await fetchWorklogViaJsonp()
       } finally {
         isLoading.value = false
       }
       return
     }
 
-    // Method 2: Fallback — Google Sheets JSONP
+    // Method 2: Fallback — Google Sheets JSONP (read-only, tidak perlu auth)
+    await fetchWorklogViaJsonp()
+    isLoading.value = false
+  }
+
+  async function fetchWorklogViaJsonp() {
     const sid = extractSpreadsheetId(sheetsUrl.value)
-    if (!sid) {
-      isLoading.value = false
-      return
-    }
+    if (!sid) return
     try {
       const wlog = await fetchSheetJSONP(sid, WORKLOG_SHEET_CONFIG.name)
       if (wlog) {
         worklog.value = parseGVizTable(wlog).map(r => mapRowToWorklog(r))
+        console.log(`[Worklog] Fetched ${worklog.value.length} entries via JSONP`)
       }
     } catch (e) {
-      console.error('Gagal fetch worklog:', e)
+      console.error('[Worklog] JSONP fetch gagal:', e)
       worklogError.value = e.message || 'Gagal memuat data worklog'
-    } finally {
-      isLoading.value = false
     }
   }
 
@@ -322,11 +276,11 @@ export const useDataStore = defineStore('data', () => {
   }
 
   return {
-    sheetsUrl, crudUrl, worklogApiUrl, sheetsConnected, crudConnected, worklogConnected, isLoading,
+    sheetsUrl, crudUrl, sheetsConnected, crudConnected, isLoading,
     masterLink, ticketing, pengadaan, dbOutlet, maintenance,
     worklog, worklogError,
     stats, chartData, recentTickets,
-    connectSheets, connectCrud, connectWorklogApi, formatRupiah, sendToAppsScript, sendToWorklogApi,
+    connectSheets, connectCrud, formatRupiah, sendToAppsScript,
     fetchWorklog
   }
 })

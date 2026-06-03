@@ -35,6 +35,8 @@ export const WORKLOG_OUTLETS = [
   "Suci",
   "Kopo",
   "Gedebage",
+  "Batununggal",
+  "Ciwastra",
   "General"
 ]
 

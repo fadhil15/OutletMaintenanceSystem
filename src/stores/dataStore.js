@@ -111,6 +111,20 @@ export const useDataStore = defineStore('data', () => {
       }))
   }
 
+
+  function getCrudRequestUrl(action) {
+    const params = new URLSearchParams()
+    if (action) params.set('action', action)
+    return `/api/apps-script${params.toString() ? `?${params.toString()}` : ''}`
+  }
+
+  function getCrudRequestHeaders(extra = {}) {
+    return {
+      ...extra,
+      'x-apps-script-url': crudUrl.value
+    }
+  }
+
   // ─── ACTIONS ───
   async function connectSheets(url) {
     if (!url) return
@@ -193,11 +207,13 @@ export const useDataStore = defineStore('data', () => {
 
     crudStatusMessage.value = 'Mengecek koneksi Apps Script...'
     try {
-      const endpoint = `${url}?action=getWorklogs`
-      const resp = await fetch(endpoint, {
+      const previousUrl = crudUrl.value
+      crudUrl.value = url
+      const resp = await fetch(getCrudRequestUrl('getWorklogs'), {
         method: 'GET',
-        headers: { Accept: 'application/json' }
+        headers: getCrudRequestHeaders({ Accept: 'application/json' })
       })
+      crudUrl.value = previousUrl
 
       const contentType = resp.headers.get('content-type') || ''
       if (!resp.ok) {
@@ -252,12 +268,17 @@ export const useDataStore = defineStore('data', () => {
     }
 
     try {
-      await fetch(crudUrl.value, {
+      const resp = await fetch(getCrudRequestUrl(), {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
+        headers: getCrudRequestHeaders({ 'Content-Type': 'text/plain' }),
         body: JSON.stringify(payload)
       })
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '')
+        throw new Error(`HTTP ${resp.status}${text ? `: ${text.slice(0, 180)}` : ''}`)
+      }
+      crudConnected.value = true
+      crudStatusMessage.value = 'Request CRUD berhasil dikirim'
       crudStatusMessage.value = 'Request CRUD terkirim (mode no-cors, status tulis tidak bisa dibaca browser)'
       return true
     } catch (e) {
@@ -278,8 +299,9 @@ export const useDataStore = defineStore('data', () => {
     // Method 1: CRUD endpoint (sama dengan endpoint modul lain)
     if (crudConnected.value && crudUrl.value) {
       try {
-        const url = `${crudUrl.value}?action=getWorklogs`
-        const resp = await fetch(url)
+        const resp = await fetch(getCrudRequestUrl('getWorklogs'), {
+          headers: getCrudRequestHeaders({ Accept: 'application/json' })
+        })
         const json = await resp.json()
         const rows = Array.isArray(json) ? json : (json.data || json.worklogs || json.rows || null)
         if (rows) {

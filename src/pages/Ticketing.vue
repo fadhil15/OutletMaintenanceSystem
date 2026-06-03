@@ -56,7 +56,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="t in filtered"
+            v-for="t in paginatedFiltered"
             :key="t.id"
             :class="{ highlighted: highlightId === t.id }"
             :ref="el => { if (highlightId === t.id) highlightRef = el }"
@@ -103,6 +103,12 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
 
     <!-- Modal -->
     <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
@@ -173,6 +179,7 @@ import { ref, computed, onMounted, watch, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 import { useWorklog } from '@/composables/useWorklog'
 import { TICKETING_OUTLETS, TICKETING_STATUSES } from '@/constants/ticketing'
@@ -186,6 +193,8 @@ const outletFilter = ref('Semua')
 const statusFilter = ref('Semua Status')
 const showModal = ref(false)
 const editingItem = ref(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = ref({})
 const highlightId = ref(route.query.highlight || null)
 const highlightRef = ref(null)
@@ -246,6 +255,13 @@ const filtered = computed(() => store.ticketing.filter(t => {
   const matchStatus = statusFilter.value === 'Semua Status' || normalizedStatus === statusFilter.value
   return matchSearch && matchOutlet && matchStatus
 }))
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, outletFilter, statusFilter, pageSize], () => { page.value = 1 })
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
 function truncate(str, max) { return str && str.length > max ? str.slice(0, max) + '...' : (str || '') }

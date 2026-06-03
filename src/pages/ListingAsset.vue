@@ -44,7 +44,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in filtered" :key="item.kode">
+          <tr v-for="item in paginatedFiltered" :key="item.kode">
             <td class="mono-cell">{{ item.kode }}</td>
             <td><StatusBadge :status="item.kategori" /></td>
             <td>{{ item.nama }}</td>
@@ -75,6 +75,12 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
 
     <!-- Summary Stats Bar -->
     <div class="summary-bar">
@@ -148,9 +154,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 
 const store = useDataStore()
@@ -158,6 +165,8 @@ const search = ref('')
 const kategoriFilter = ref('Semua')
 const showModal = ref(false)
 const editingItem = ref(null)
+const page = ref(1)
+const pageSize = ref(10)
 
 const form = ref({ kode: '', kategori: '', nama: '', linkCO: '', toko: '', harga: 0 })
 
@@ -166,6 +175,13 @@ const filtered = computed(() => store.masterLink.filter(item => {
   const matchKat = kategoriFilter.value === 'Semua' || item.kategori === kategoriFilter.value
   return matchSearch && matchKat
 }))
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, kategoriFilter, pageSize], () => { page.value = 1 })
 
 const kitchenCount = computed(() => store.masterLink.filter(i => i.kategori === 'Kitchen').length)
 const totalValue = computed(() => store.masterLink.reduce((s, i) => s + (i.harga || 0), 0))

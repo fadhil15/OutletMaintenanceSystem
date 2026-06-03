@@ -26,6 +26,15 @@
           @click="outletFilter = o"
         >{{ o }}</button>
       </div>
+      <div class="filter-pills status-filter-pills">
+        <button
+          v-for="s in ['Semua Status', ...TICKET_STATUSES]"
+          :key="s"
+          class="pill"
+          :class="{ active: statusFilter === s }"
+          @click="statusFilter = s"
+        >{{ s }}</button>
+      </div>
     </div>
 
     <div class="table-wrapper" style="margin-top: 1rem;">
@@ -45,7 +54,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="t in filtered"
+            v-for="t in paginatedFiltered"
             :key="t.id"
             :class="{ highlighted: highlightId === t.id }"
             :ref="el => { if (highlightId === t.id) highlightRef = el }"
@@ -92,6 +101,12 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
 
     <!-- Modal -->
     <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
@@ -162,6 +177,7 @@ import { ref, computed, onMounted, watch, nextTick, inject } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 import { useWorklog } from '@/composables/useWorklog'
 
@@ -171,13 +187,17 @@ const { createAutoWorklog } = useWorklog()
 const addToast = inject('addToast', () => {})
 const search = ref('')
 const outletFilter = ref('Semua')
+const statusFilter = ref('Semua Status')
 const showModal = ref(false)
 const editingItem = ref(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = ref({})
 const highlightId = ref(route.query.highlight || null)
 const highlightRef = ref(null)
 
-const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage', 'Batununggal', 'Ciwastra']
+const TICKET_STATUSES = ['Pending', 'Sedang Diproses', 'Selesai']
 
 // Scroll to highlighted row on mount
 onMounted(async () => {
@@ -218,8 +238,16 @@ const filtered = computed(() => store.ticketing.filter(t => {
   const q = search.value.toLowerCase()
   const matchSearch = !q || [t.id, t.outlet, t.barang, t.kendala, t.pic].join(' ').toLowerCase().includes(q)
   const matchOutlet = outletFilter.value === 'Semua' || t.outlet === outletFilter.value
-  return matchSearch && matchOutlet
+  const matchStatus = statusFilter.value === 'Semua Status' || t.status === statusFilter.value
+  return matchSearch && matchOutlet && matchStatus
 }))
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, outletFilter, statusFilter, pageSize], () => { page.value = 1 })
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
 function truncate(str, max) { return str && str.length > max ? str.slice(0, max) + '...' : (str || '') }
@@ -288,6 +316,7 @@ function deleteItem(id) {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.status-filter-pills { flex-basis: 100%; }
 .toolbar-search { position: relative; flex: 0 0 200px; }
 .toolbar-search .material-symbols-outlined { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--color-on-surface-variant); font-size: 1rem; }
 .toolbar-search input { width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; background: var(--color-surface-container-highest); border: none; border-radius: 0.5rem; font-size: 0.875rem; font-family: var(--font-family-body); color: var(--color-on-surface); outline: none; }

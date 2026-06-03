@@ -21,8 +21,13 @@
 
     <!-- Branch Filter + Sub Nav -->
     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.75rem;">
-      <div class="filter-pills">
-        <button v-for="c in ['Semua', ...CABANG]" :key="c" class="pill" :class="{ active: cabangFilter === c }" @click="cabangFilter = c">{{ c }}</button>
+      <div class="filter-group-stack">
+        <div class="filter-pills">
+          <button v-for="c in ['Semua', ...CABANG]" :key="c" class="pill" :class="{ active: cabangFilter === c }" @click="cabangFilter = c">{{ c }}</button>
+        </div>
+        <div class="filter-pills status-filter-pills">
+          <button v-for="s in ['Semua Status', ...MAINTENANCE_STATUSES]" :key="s" class="pill" :class="{ active: statusFilter === s }" @click="statusFilter = s">{{ s }}</button>
+        </div>
       </div>
       <div class="sub-nav">
         <button v-for="v in views" :key="v.key" class="sub-nav-btn" :class="{ active: activeView === v.key }" @click="activeView = v.key">
@@ -34,7 +39,7 @@
 
     <!-- Kanban View -->
     <div v-if="activeView === 'kanban'" class="kanban-board">
-      <div v-for="col in kanbanCols" :key="col.status" class="kanban-col">
+      <div v-for="col in displayedKanbanCols" :key="col.status" class="kanban-col">
         <div class="kanban-col-header" :style="{ borderTop: `3px solid ${col.color}` }">
           <span>{{ col.status }}</span>
           <span class="kanban-count" :style="{ background: col.color + '20', color: col.color }">{{ filteredByStatus(col.status).length }}</span>
@@ -72,7 +77,7 @@
           <div v-for="w in ganttWeeks" :key="w" class="gantt-week-label">{{ w }}</div>
         </div>
       </div>
-      <div v-for="item in filteredMnt" :key="item.id" class="gantt-row">
+      <div v-for="item in paginatedMnt" :key="item.id" class="gantt-row">
         <div class="gantt-label">
           <div class="gantt-label-name">{{ item.pekerjaan }}</div>
           <div class="gantt-label-sub">{{ item.cabang }} · {{ item.pic }}</div>
@@ -107,7 +112,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in filteredMnt" :key="m.id">
+          <tr v-for="m in paginatedMnt" :key="m.id">
             <td class="mono-cell">{{ m.id }}</td>
             <td style="font-weight: 600;">{{ m.cabang }}</td>
             <td style="color: var(--color-on-surface-variant); font-size: 0.8125rem;">{{ m.kategori }}</td>
@@ -139,6 +144,13 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-if="activeView !== 'kanban'"
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filteredMnt.length"
+    />
 
     <!-- Modal -->
     <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
@@ -211,9 +223,10 @@
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 import { useWorklog } from '@/composables/useWorklog'
 
@@ -221,12 +234,16 @@ const store = useDataStore()
 const { createAutoWorklog } = useWorklog()
 const addToast = inject('addToast', () => {})
 const cabangFilter = ref('Semua')
+const statusFilter = ref('Semua Status')
 const activeView = ref('kanban')
+const page = ref(1)
+const pageSize = ref(10)
 const showModal = ref(false)
 const editingItem = ref(null)
 const form = ref({})
 
-const CABANG = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Suci', 'Kopo', 'Gedebage', 'Ayam Mirasa']
+const CABANG = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Suci', 'Kopo', 'Gedebage', 'Ayam Mirasa', 'Batununggal', 'Ciwastra']
+const MAINTENANCE_STATUSES = ['To Do', 'Sudah CO', 'Proses Pengerjaan', 'Pengerjaan Selesai']
 
 const views = [
   { key: 'timeline', icon: 'calendar_month', label: 'Timeline' },
@@ -234,12 +251,21 @@ const views = [
   { key: 'table', icon: 'table_rows', label: 'Data Table' },
 ]
 
-const kanbanCols = [
-  { status: 'To Do', color: '#6b7280' },
-  { status: 'Sudah CO', color: '#d97706' },
-  { status: 'Proses Pengerjaan', color: '#0057be' },
-  { status: 'Pengerjaan Selesai', color: '#059669' },
-]
+const kanbanCols = MAINTENANCE_STATUSES.map(status => ({
+  status,
+  color: {
+    'To Do': '#6b7280',
+    'Sudah CO': '#d97706',
+    'Proses Pengerjaan': '#0057be',
+    'Pengerjaan Selesai': '#059669'
+  }[status]
+}))
+
+const displayedKanbanCols = computed(() =>
+  statusFilter.value === 'Semua Status'
+    ? kanbanCols
+    : kanbanCols.filter(col => col.status === statusFilter.value)
+)
 
 const summaryCards = computed(() => [
   { label: 'To Do', value: store.maintenance.filter(m => m.status === 'To Do').length, color: '#6b7280' },
@@ -248,9 +274,18 @@ const summaryCards = computed(() => [
   { label: 'Pengerjaan Selesai', value: store.maintenance.filter(m => m.status === 'Pengerjaan Selesai').length, color: '#059669' },
 ])
 
-const filteredMnt = computed(() => store.maintenance.filter(m =>
-  cabangFilter.value === 'Semua' || m.cabang === cabangFilter.value
-))
+const filteredMnt = computed(() => store.maintenance.filter(m => {
+  const matchCabang = cabangFilter.value === 'Semua' || m.cabang === cabangFilter.value
+  const matchStatus = statusFilter.value === 'Semua Status' || m.status === statusFilter.value
+  return matchCabang && matchStatus
+}))
+
+const paginatedMnt = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filteredMnt.value.slice(start, start + pageSize.value)
+})
+
+watch([cabangFilter, statusFilter, activeView, pageSize], () => { page.value = 1 })
 
 function filteredByStatus(status) {
   return filteredMnt.value.filter(m => m.status === status)
@@ -377,6 +412,15 @@ function deleteItem(id) {
   color: var(--color-on-surface-variant);
 }
 
+.filter-group-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.status-filter-pills {
+  max-width: 100%;
+}
+
 /* Sub Nav */
 .sub-nav {
   display: flex;
@@ -439,6 +483,9 @@ function deleteItem(id) {
   border-radius: 9999px;
 }
 .kanban-cards {
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
   padding: 0.5rem;
   display: flex;
   flex-direction: column;

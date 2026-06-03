@@ -279,6 +279,7 @@ export const useDataStore = defineStore('data', () => {
       }
       crudConnected.value = true
       crudStatusMessage.value = 'Request CRUD berhasil dikirim'
+      crudStatusMessage.value = 'Request CRUD terkirim (mode no-cors, status tulis tidak bisa dibaca browser)'
       return true
     } catch (e) {
       crudConnected.value = false

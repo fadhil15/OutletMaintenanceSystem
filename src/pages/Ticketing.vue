@@ -17,14 +17,25 @@
         <span class="material-symbols-outlined">search</span>
         <input v-model="search" type="text" placeholder="Cari tiket..." />
       </div>
-      <div class="filter-pills" style="flex: 1;">
-        <button
-          v-for="o in ['Semua', ...OUTLETS]"
-          :key="o"
-          class="pill"
-          :class="{ active: outletFilter === o }"
-          @click="outletFilter = o"
-        >{{ o }}</button>
+      <div class="ticket-filter-stack">
+        <div class="filter-pills">
+          <button
+            v-for="o in ['Semua', ...OUTLETS]"
+            :key="o"
+            class="pill"
+            :class="{ active: outletFilter === o }"
+            @click="outletFilter = o"
+          >{{ o }}</button>
+        </div>
+        <div class="filter-pills ticket-status-pills" aria-label="Filter status tiket">
+          <button
+            v-for="status in ['Semua Status', ...TICKET_STATUSES]"
+            :key="status"
+            class="pill"
+            :class="{ active: statusFilter === status }"
+            @click="statusFilter = status"
+          >{{ status }}</button>
+        </div>
       </div>
       <div class="filter-pills status-filter-pills">
         <button
@@ -83,7 +94,7 @@
               </a>
               <span v-else style="color: var(--color-on-surface-variant); font-size: 0.75rem;">—</span>
             </td>
-            <td><StatusBadge :status="t.status" /></td>
+            <td><StatusBadge :status="normalizeTicketStatus(t.status)" /></td>
             <td style="font-size: 0.8125rem;">{{ t.pic || '—' }}</td>
             <td>
               <div class="action-btns">
@@ -196,6 +207,20 @@ const form = ref({})
 const highlightId = ref(route.query.highlight || null)
 const highlightRef = ref(null)
 
+const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+const TICKET_STATUSES = ['Pending', 'Sedang Diproses', 'Selesai']
+
+function normalizeTicketStatus(status) {
+  const raw = String(status || '').trim()
+  const compact = raw.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
+
+  if (!compact) return 'Pending'
+  if (compact.includes('selesai') || compact.includes('done') || compact.includes('complete')) return 'Selesai'
+  if (compact.includes('proses') || compact.includes('process') || compact.includes('progress')) return 'Sedang Diproses'
+  if (compact.includes('pending') || compact.includes('open') || compact.includes('baru')) return 'Pending'
+
+  return raw
+}
 const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage', 'Batununggal', 'Ciwastra']
 const TICKET_STATUSES = ['Pending', 'Sedang Diproses', 'Selesai']
 
@@ -236,8 +261,10 @@ function linkedPengadaan(ticketId) {
 
 const filtered = computed(() => store.ticketing.filter(t => {
   const q = search.value.toLowerCase()
-  const matchSearch = !q || [t.id, t.outlet, t.barang, t.kendala, t.pic].join(' ').toLowerCase().includes(q)
+  const normalizedStatus = normalizeTicketStatus(t.status)
+  const matchSearch = !q || [t.id, t.outlet, t.barang, t.kendala, t.pic, normalizedStatus].join(' ').toLowerCase().includes(q)
   const matchOutlet = outletFilter.value === 'Semua' || t.outlet === outletFilter.value
+  const matchStatus = statusFilter.value === 'Semua Status' || normalizedStatus === statusFilter.value
   const matchStatus = statusFilter.value === 'Semua Status' || t.status === statusFilter.value
   return matchSearch && matchOutlet && matchStatus
 }))
@@ -260,7 +287,7 @@ function openModal(item = null) {
 }
 function saveItem() {
   const isEditing = !!editingItem.value
-  const oldStatus = isEditing ? editingItem.value.status : null
+  const oldStatus = isEditing ? normalizeTicketStatus(editingItem.value.status) : null
   if (isEditing) {
     const idx = store.ticketing.findIndex(i => i.id === editingItem.value.id)
     if (idx !== -1) store.ticketing[idx] = { ...form.value }
@@ -283,12 +310,12 @@ function saveItem() {
       judulAktivitas: 'Tiket baru dibuat',
       catatanDetail: `Barang: ${form.value.barang}\nKendala: ${form.value.kendala || '-'}`,
       pic: form.value.pic || '',
-      prioritas: form.value.status === 'Pending' ? 'High' : 'Medium',
+      prioritas: normalizeTicketStatus(form.value.status) === 'Pending' ? 'High' : 'Medium',
       statusFollowUp: 'Open'
     })
   }
   // Auto worklog — ticket completed (guard: old !== new)
-  if (isEditing && form.value.status === 'Selesai' && oldStatus !== 'Selesai') {
+  if (isEditing && normalizeTicketStatus(form.value.status) === 'Selesai' && oldStatus !== 'Selesai') {
     createAutoWorklog({
       tipeAktivitas: 'Update Status',
       modulTerkait: 'Ticketing',
@@ -315,6 +342,9 @@ function deleteItem(id) {
 </script>
 
 <style scoped>
+.toolbar { display: flex; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.ticket-filter-stack { display: flex; flex: 1; flex-direction: column; gap: 0.5rem; min-width: min(100%, 320px); }
+.ticket-status-pills .pill { font-size: 0.6875rem; }
 .toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .status-filter-pills { flex-basis: 100%; }
 .toolbar-search { position: relative; flex: 0 0 200px; }

@@ -6,9 +6,11 @@ import { WORKLOG_SHEET_CONFIG } from '@/constants/worklog'
 export const useDataStore = defineStore('data', () => {
   // Connection state
   const sheetsUrl = ref(localStorage.getItem('oms_sheets_url') || 'https://docs.google.com/spreadsheets/d/1X4o9LeUKI9fh4i5SSOSVnGzuZJCQpR20YRkToAvRrhQ/edit?usp=sharing')
-  const crudUrl = ref(localStorage.getItem('oms_crud_url') || 'https://script.google.com/macros/s/AKfycbxG0XFL61JB9XNhOUUbS4En0AlYeAURXcHfLKhYaA2bqHL-4cMsXe2WiXA-31i1oeRE/exec')
+  const crudUrl = ref(localStorage.getItem('oms_crud_url') || 'https://script.google.com/macros/s/AKfycbztW1H2ol7cad7LU1l2-t_RFs5nb_EYB7toZYYA4mc7VGHj1l1h1FDMNks7vkMNVN8/exec')
   const sheetsConnected = ref(false)
-  const crudConnected = ref(true) // Default true as per user request
+  const crudConnected = ref(false)
+  const crudStatusMessage = ref('Belum dites')
+  const crudLastChecked = ref('')
   const isLoading = ref(false)
 
   // Data arrays
@@ -181,18 +183,74 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
-  function connectCrud(url) {
-    if (!url) return
+  async function testCrudConnection(url = crudUrl.value) {
+    if (!url) {
+      crudConnected.value = false
+      crudStatusMessage.value = 'URL Apps Script belum diisi'
+      crudLastChecked.value = new Date().toISOString()
+      return false
+    }
+
+    crudStatusMessage.value = 'Mengecek koneksi Apps Script...'
+    try {
+      const endpoint = `${url}?action=getWorklogs`
+      const resp = await fetch(endpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      })
+
+      const contentType = resp.headers.get('content-type') || ''
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status} ${resp.statusText || ''}`.trim())
+      }
+      if (!contentType.includes('application/json')) {
+        throw new Error(`Response bukan JSON (${contentType || 'tanpa content-type'}). Pastikan Web App bisa diakses Anyone, bukan hanya akun Google Anda.`)
+      }
+
+      const json = await resp.json()
+      const rows = Array.isArray(json)
+        ? json
+        : (json.data || json.worklogs || json.rows || [])
+      const statusOk = json.ok === true || json.status === 'ok' || Array.isArray(json) || Array.isArray(rows)
+      if (!statusOk) {
+        throw new Error(json.error || json.message || 'Format response Apps Script tidak dikenali')
+      }
+
+      crudConnected.value = true
+      crudStatusMessage.value = `Terhubung (${Array.isArray(rows) ? rows.length : 0} worklog terbaca)`
+      crudLastChecked.value = new Date().toISOString()
+      return true
+    } catch (e) {
+      crudConnected.value = false
+      crudStatusMessage.value = `Gagal koneksi Apps Script: ${e.message}`
+      crudLastChecked.value = new Date().toISOString()
+      console.warn('[CRUD] Connection test failed:', e)
+      return false
+    }
+  }
+
+  async function connectCrud(url) {
+    if (!url) return false
     crudUrl.value = url
     localStorage.setItem('oms_crud_url', url)
-    crudConnected.value = true
+    return await testCrudConnection(url)
   }
 
   async function sendToAppsScript(payload) {
-    if (!crudConnected.value || !crudUrl.value) {
+    if (!crudUrl.value) {
+      crudConnected.value = false
+      crudStatusMessage.value = 'CRUD tidak aktif: URL Apps Script belum diisi'
       console.warn('CRUD tidak aktif')
       return false
     }
+
+    // Jangan blokir POST hanya karena test GET gagal.
+    // Apps Script sering tidak mengizinkan response dibaca browser (CORS),
+    // sementara POST no-cors tetap bisa dieksekusi kalau deployment public.
+    if (!crudConnected.value) {
+      await testCrudConnection(crudUrl.value)
+    }
+
     try {
       await fetch(crudUrl.value, {
         method: 'POST',
@@ -200,8 +258,11 @@ export const useDataStore = defineStore('data', () => {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       })
+      crudStatusMessage.value = 'Request CRUD terkirim (mode no-cors, status tulis tidak bisa dibaca browser)'
       return true
     } catch (e) {
+      crudConnected.value = false
+      crudStatusMessage.value = `CRUD Request Failed: ${e.message}`
       console.error('CRUD Request Failed', e)
       return false
     }
@@ -220,7 +281,7 @@ export const useDataStore = defineStore('data', () => {
         const url = `${crudUrl.value}?action=getWorklogs`
         const resp = await fetch(url)
         const json = await resp.json()
-        const rows = json.data || (Array.isArray(json) ? json : null)
+        const rows = Array.isArray(json) ? json : (json.data || json.worklogs || json.rows || null)
         if (rows) {
           worklog.value = rows.map(row => ({
             idLog:           row['ID Log'] || '',
@@ -276,11 +337,11 @@ export const useDataStore = defineStore('data', () => {
   }
 
   return {
-    sheetsUrl, crudUrl, sheetsConnected, crudConnected, isLoading,
+    sheetsUrl, crudUrl, sheetsConnected, crudConnected, crudStatusMessage, crudLastChecked, isLoading,
     masterLink, ticketing, pengadaan, dbOutlet, maintenance,
     worklog, worklogError,
     stats, chartData, recentTickets,
-    connectSheets, connectCrud, formatRupiah, sendToAppsScript,
+    connectSheets, connectCrud, testCrudConnection, formatRupiah, sendToAppsScript,
     fetchWorklog
   }
 })

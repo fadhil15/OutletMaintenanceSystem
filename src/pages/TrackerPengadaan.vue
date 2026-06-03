@@ -20,6 +20,9 @@
       <div class="filter-pills" style="flex: 1;">
         <button v-for="o in ['Semua', ...OUTLETS]" :key="o" class="pill" :class="{ active: outletFilter === o }" @click="outletFilter = o">{{ o }}</button>
       </div>
+      <div class="filter-pills status-filter-pills">
+        <button v-for="s in ['Semua Status', ...PENGADAAN_STATUSES]" :key="s" class="pill" :class="{ active: statusFilter === s }" @click="statusFilter = s">{{ s }}</button>
+      </div>
     </div>
 
     <div class="table-wrapper" style="margin-top: 1rem;">
@@ -38,7 +41,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="p in filtered" :key="p.id">
+          <tr v-for="p in paginatedFiltered" :key="p.id">
             <td class="mono-cell">{{ p.id }}</td>
             <td class="mono-cell">
               <router-link
@@ -74,6 +77,12 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
 
     <!-- Modal -->
     <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
@@ -145,9 +154,10 @@
 </template>
 
 <script setup>
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 import { useWorklog } from '@/composables/useWorklog'
 
@@ -156,18 +166,30 @@ const { createAutoWorklog } = useWorklog()
 const addToast = inject('addToast', () => {})
 const search = ref('')
 const outletFilter = ref('Semua')
+const statusFilter = ref('Semua Status')
 const showModal = ref(false)
 const editingItem = ref(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = ref({})
 
-const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage', 'Batununggal', 'Ciwastra']
+const PENGADAAN_STATUSES = ['Dikemas', 'Dikirim', 'Diterima Outlet']
 
 const filtered = computed(() => store.pengadaan.filter(p => {
   const q = search.value.toLowerCase()
   const matchSearch = !q || [p.id, p.idTiket, p.barang, p.outlet, p.resi].join(' ').toLowerCase().includes(q)
   const matchOutlet = outletFilter.value === 'Semua' || p.outlet === outletFilter.value
-  return matchSearch && matchOutlet
+  const matchStatus = statusFilter.value === 'Semua Status' || p.status === statusFilter.value
+  return matchSearch && matchOutlet && matchStatus
 }))
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, outletFilter, statusFilter, pageSize], () => { page.value = 1 })
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
 
@@ -247,6 +269,7 @@ function deleteItem(id) {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.status-filter-pills { flex-basis: 100%; }
 .toolbar-search { position: relative; flex: 0 0 200px; }
 .toolbar-search .material-symbols-outlined { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--color-on-surface-variant); font-size: 1rem; }
 .toolbar-search input { width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; background: var(--color-surface-container-highest); border: none; border-radius: 0.5rem; font-size: 0.875rem; font-family: var(--font-family-body); color: var(--color-on-surface); outline: none; }

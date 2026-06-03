@@ -66,8 +66,12 @@
         </div>
         <button class="btn-dark" @click="connectCrud">
           <span class="material-symbols-outlined">link</span>
-          Connect Web App
+          Test & Connect Web App
         </button>
+        <p class="connection-message" :class="store.crudConnected ? 'ok' : 'error'">
+          {{ store.crudStatusMessage }}
+          <span v-if="store.crudLastChecked">· {{ formatLastChecked(store.crudLastChecked) }}</span>
+        </p>
       </div>
     </div>
 
@@ -144,7 +148,7 @@ const sheetNodes = ref([
   { name: 'Tracker Sheet', icon: 'local_shipping', lastSync: '2026-03-30 14:15:22', latency: '210ms', ok: true },
   { name: 'DB Outlet Sheet', icon: 'storefront', lastSync: '2026-03-30 14:19:30', latency: '156ms', ok: true },
   { name: 'Maintenance Sheet', icon: 'build', lastSync: '2026-03-30 14:20:05', latency: '165ms', ok: true },
-  { name: 'Worklog Sheet', icon: 'edit_note', lastSync: '—', latency: '—', ok: !!store.crudUrl },
+  { name: 'Worklog Sheet', icon: 'edit_note', lastSync: '—', latency: '—', ok: store.crudConnected },
 ])
 
 function connectSheets() {
@@ -153,22 +157,29 @@ function connectSheets() {
   alert('Connecting to Google Sheets...\n\nPastikan spreadsheet di-share: Anyone → Viewer')
 }
 
-function connectCrud() {
+async function connectCrud() {
   if (!crudInput.value) return
-  store.connectCrud(crudInput.value)
-  alert('CRUD API Connected!\n\nPastikan deploy Apps Script: Execute as Me → Anyone')
+  const ok = await store.connectCrud(crudInput.value)
+  alert(ok
+    ? 'CRUD API Connected!\n\nEndpoint Apps Script dapat dibaca dan mengembalikan JSON.'
+    : `${store.crudStatusMessage}\n\nPastikan deploy Apps Script: Execute as Me → Anyone, URL /exec benar, dan doGet(action=getWorklogs) mengembalikan JSON.`
+  )
 }
 
-function runDiagnostics() {
+async function runDiagnostics() {
   diagRunning.value = true
-  setTimeout(() => {
-    sheetNodes.value = sheetNodes.value.map(n => ({
-      ...n,
-      lastSync: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      latency: Math.floor(100 + Math.random() * 200) + 'ms',
-    }))
-    diagRunning.value = false
-  }, 1500)
+  const startedAt = Date.now()
+  const crudOk = await store.testCrudConnection(crudInput.value)
+  const crudLatency = `${Date.now() - startedAt}ms`
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+
+  sheetNodes.value = sheetNodes.value.map(n => ({
+    ...n,
+    lastSync: now,
+    latency: n.name === 'Worklog Sheet' ? crudLatency : Math.floor(100 + Math.random() * 200) + 'ms',
+    ok: n.name === 'Worklog Sheet' ? crudOk : n.ok,
+  }))
+  diagRunning.value = false
 }
 
 function discardChanges() {
@@ -176,10 +187,19 @@ function discardChanges() {
   crudInput.value = store.crudUrl
 }
 
-function applyConfig() {
+async function applyConfig() {
   if (sheetsInput.value) store.connectSheets(sheetsInput.value)
-  if (crudInput.value) store.connectCrud(crudInput.value)
+  if (crudInput.value) await store.connectCrud(crudInput.value)
   alert('Configuration applied!')
+}
+
+function formatLastChecked(value) {
+  return new Date(value).toLocaleString('id-ID', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 </script>
 
@@ -218,6 +238,14 @@ function applyConfig() {
   background: rgba(179,27,37,0.1);
   color: var(--color-error);
 }
+.connection-message {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-on-surface-variant);
+}
+.connection-message.ok { color: #059669; }
+.connection-message.error { color: var(--color-error); }
 .status-dot {
   width: 6px;
   height: 6px;

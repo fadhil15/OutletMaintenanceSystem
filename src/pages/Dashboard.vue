@@ -11,6 +11,46 @@
         New Ticket Request
       </router-link>
     </div>
+    <!-- Operations KPI Strip -->
+    <section class="ops-kpi-section" aria-label="Operations KPI indicators">
+      <div class="ops-health-card" :class="operationsHealth.tone" @click="$router.push('/worklog')">
+        <div class="ops-health-top">
+          <div>
+            <p class="ops-eyebrow">Operations Health</p>
+            <div class="ops-health-score">
+              <span>{{ operationsHealth.score }}%</span>
+              <small>{{ operationsHealth.label }}</small>
+            </div>
+          </div>
+          <span class="material-symbols-outlined ops-health-icon">monitoring</span>
+        </div>
+        <div class="ops-progress-track">
+          <div class="ops-progress-fill" :style="{ width: operationsHealth.score + '%' }"></div>
+        </div>
+        <div class="ops-health-breakdown">
+          <span>Ticket {{ ticketHealthPct }}%</span>
+          <span>Aset {{ assetHealthPct }}%</span>
+          <span>Pengadaan {{ procurementHealthPct }}%</span>
+          <span>Maintenance {{ maintenanceHealthPct }}%</span>
+          <span>Follow-up {{ followUpHealthPct }}%</span>
+        </div>
+      </div>
+
+      <button
+        v-for="kpi in operationsKpis"
+        :key="kpi.key"
+        class="ops-kpi-card"
+        :class="kpi.tone"
+        @click="$router.push(kpi.route)"
+      >
+        <span class="material-symbols-outlined ops-kpi-icon">{{ kpi.icon }}</span>
+        <span class="ops-kpi-content">
+          <span class="ops-kpi-label">{{ kpi.label }}</span>
+          <strong>{{ kpi.value }}</strong>
+          <small>{{ kpi.caption }}</small>
+        </span>
+      </button>
+    </section>
 
     <!-- KPI Donut Charts -->
     <section class="kpi-grid">
@@ -265,7 +305,7 @@
               </div>
             </div>
             <div class="ticket-meta">
-              <StatusBadge :status="ticket.status" />
+              <StatusBadge :status="normalizeTicketStatus(ticket.status)" />
               <div class="ticket-time">{{ formatDate(ticket.waktu) }}</div>
             </div>
           </div>
@@ -322,30 +362,29 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
+import { TICKETING_OUTLETS } from '@/constants/ticketing'
 
 const store = useDataStore()
 
-const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage', 'Batununggal', 'Ciwastra']
-const spillIndex = ref(0)
-let spillTimer = null
+const OUTLETS = TICKETING_OUTLETS
 
-onMounted(() => {
-  spillTimer = setInterval(() => { spillIndex.value += 1 }, 4500)
-})
+function normalizeTicketStatus(status) {
+  const raw = String(status || '').trim()
+  const compact = raw.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
 
-onUnmounted(() => {
-  if (spillTimer) clearInterval(spillTimer)
-})
+  if (!compact) return 'Pending'
+  if (compact.includes('selesai') || compact.includes('done') || compact.includes('complete')) return 'Selesai'
+  if (compact.includes('proses') || compact.includes('process') || compact.includes('progress')) return 'Sedang Diproses'
+  if (compact.includes('pending') || compact.includes('open') || compact.includes('baru')) return 'Pending'
+
+  return raw
+}
 
 // Computed helpers for ticket status
-const tiketPending = computed(() => store.ticketing.filter(t => t.status === 'Pending').length)
-const tiketDiproses = computed(() => store.ticketing.filter(t => t.status === 'Sedang Diproses').length)
-const tiketSelesai = computed(() => store.ticketing.filter(t => t.status === 'Selesai').length)
-const pgdDiterima = computed(() => store.pengadaan.filter(p => p.status === 'Diterima Outlet').length)
-const maintenanceTodo = computed(() => store.maintenance.filter(m => m.status === 'To Do').length)
-const maintenanceSudahCO = computed(() => store.maintenance.filter(m => m.status === 'Sudah CO').length)
-const maintenanceProses = computed(() => store.maintenance.filter(m => m.status === 'Proses Pengerjaan').length)
-const maintenanceActiveCount = computed(() => maintenanceTodo.value + maintenanceSudahCO.value + maintenanceProses.value)
+const tiketPending = computed(() => store.ticketing.filter(t => normalizeTicketStatus(t.status) === 'Pending').length)
+const tiketDiproses = computed(() => store.ticketing.filter(t => normalizeTicketStatus(t.status) === 'Sedang Diproses').length)
+const tiketSelesai = computed(() => store.ticketing.filter(t => normalizeTicketStatus(t.status) === 'Selesai').length)
+const pgdDiterima = computed(() => store.pengadaan.filter(p => String(p.status || '').includes('Diterima')).length)
 
 // Weighted progress: Pending=0pt, Diproses=0.5pt, Selesai=1pt
 const tiketWeightedPct = computed(() => {
@@ -367,58 +406,153 @@ const tiketSegments = computed(() => {
   }
 })
 
-const maintenanceSegments = computed(() => {
-  const total = maintenanceActiveCount.value
-  if (total === 0) return { todo: 0, sudahCO: 0, proses: 0 }
-  const C = 251.3
-  return {
-    todo: Math.round((maintenanceTodo.value / total) * C * 10) / 10,
-    sudahCO: Math.round((maintenanceSudahCO.value / total) * C * 10) / 10,
-    proses: Math.round((maintenanceProses.value / total) * C * 10) / 10,
+const openTickets = computed(() => tiketPending.value + tiketDiproses.value)
+const assetRiskCount = computed(() => store.stats.asetRusak)
+const procurementInTransit = computed(() => store.stats.dalamPengiriman)
+
+function isMaintenanceDone(status) {
+  return String(status || '').toLowerCase().includes('selesai')
+}
+
+const activeMaintenanceCount = computed(() =>
+  store.maintenance.filter(item => !isMaintenanceDone(item.status)).length
+)
+
+const maintenanceHealthPct = computed(() => {
+  const total = store.maintenance.length
+  if (total === 0) return 100
+  const done = store.maintenance.filter(item => isMaintenanceDone(item.status)).length
+  return Math.round((done / total) * 100)
+})
+
+function parseDateOnly(value) {
+  if (!value) return null
+  const raw = String(value).trim()
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+
+  const local = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/)
+  if (local) {
+    const year = Number(local[3].length === 2 ? `20${local[3]}` : local[3])
+    return new Date(year, Number(local[2]) - 1, Number(local[1]))
   }
-})
 
-function pickRotating(items) {
-  if (!items.length) return null
-  return items[spillIndex.value % items.length]
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
 }
 
-function shortText(value, max = 34) {
-  const text = String(value || '').trim()
-  return text.length > max ? text.slice(0, max) + '…' : text
+const todayDate = computed(() => {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
+})
+
+function isOpenFollowUp(worklog) {
+  const status = String(worklog.statusFollowUp || '').trim()
+  return status !== 'Done' && status !== 'Cancelled'
 }
 
-const ticketSpills = computed(() => {
-  const priority = store.ticketing.filter(t => t.status !== 'Selesai')
-  const source = priority.length ? priority : store.ticketing
-  return source.slice(0, 5).map(t => ({
-    icon: t.status === 'Pending' ? 'priority_high' : 'confirmation_number',
-    title: `${t.id || 'Tiket'} · ${shortText(t.barang || 'Item')}`,
-    meta: `${t.outlet || 'Outlet'} · ${t.status || 'Pending'}${t.pic ? ' · ' + t.pic : ''}`
-  }))
+const followUpTotal = computed(() =>
+  store.worklog.filter(worklog => String(worklog.statusFollowUp || '').trim()).length
+)
+
+const followUpDoneCount = computed(() =>
+  store.worklog.filter(worklog => String(worklog.statusFollowUp || '').trim() === 'Done').length
+)
+
+const overdueFollowUps = computed(() =>
+  store.worklog.filter(worklog => {
+    if (!isOpenFollowUp(worklog)) return false
+    const followUpDate = parseDateOnly(worklog.tanggalFollowUp)
+    return followUpDate && followUpDate.getTime() < todayDate.value.getTime()
+  }).length
+)
+
+const dueTodayFollowUps = computed(() =>
+  store.worklog.filter(worklog => {
+    if (!isOpenFollowUp(worklog)) return false
+    const followUpDate = parseDateOnly(worklog.tanggalFollowUp)
+    return followUpDate && followUpDate.getTime() === todayDate.value.getTime()
+  }).length
+)
+
+const urgentOpenFollowUps = computed(() =>
+  store.worklog.filter(worklog => worklog.prioritas === 'Urgent' && isOpenFollowUp(worklog)).length
+)
+
+const followUpHealthPct = computed(() => {
+  if (followUpTotal.value === 0) return 100
+  const completionPct = Math.round((followUpDoneCount.value / followUpTotal.value) * 100)
+  return Math.max(0, completionPct - (overdueFollowUps.value * 5))
 })
 
-const maintenanceSpills = computed(() => {
-  const source = store.maintenance.filter(m => m.status !== 'Pengerjaan Selesai').slice(0, 5)
-  return source.map(m => ({
-    icon: m.status === 'To Do' ? 'playlist_add_check' : 'construction',
-    title: `${m.id || 'Project'} · ${shortText(m.pekerjaan || 'Maintenance')}`,
-    meta: `${m.cabang || 'Cabang'} · ${m.status || 'To Do'}${m.pic ? ' · ' + m.pic : ''}`
-  }))
+const ticketHealthPct = computed(() => store.ticketing.length === 0 ? 100 : tiketWeightedPct.value)
+const assetHealthPct = computed(() => store.dbOutlet.length === 0 ? 100 : store.chartData.asetPct)
+const procurementHealthPct = computed(() => store.pengadaan.length === 0 ? 100 : store.chartData.pgdPct)
+
+const operationsHealth = computed(() => {
+  const score = Math.round(
+    (ticketHealthPct.value * 0.30) +
+    (assetHealthPct.value * 0.20) +
+    (procurementHealthPct.value * 0.20) +
+    (maintenanceHealthPct.value * 0.20) +
+    (followUpHealthPct.value * 0.10)
+  )
+
+  if (score >= 85) return { score, label: 'Healthy', tone: 'is-healthy' }
+  if (score >= 70) return { score, label: 'Watch', tone: 'is-watch' }
+  if (score >= 50) return { score, label: 'At Risk', tone: 'is-risk' }
+  return { score, label: 'Critical', tone: 'is-critical' }
 })
 
-const pengadaanSpills = computed(() => {
-  const source = store.pengadaan.filter(p => p.status !== 'Diterima Outlet').slice(0, 5)
-  return source.map(p => ({
-    icon: p.status === 'Dikirim' ? 'local_shipping' : 'inventory_2',
-    title: `${p.id || 'Pengadaan'} · ${shortText(p.barang || 'Barang')}`,
-    meta: `${p.outlet || 'Outlet'} · ${p.status || 'Dikemas'}${p.resi ? ' · ' + shortText(p.resi, 18) : ''}`
-  }))
-})
+const operationsKpis = computed(() => [
+  {
+    key: 'open-tickets',
+    label: 'Open Tickets',
+    value: openTickets.value,
+    caption: `${tiketPending.value} pending · ${tiketDiproses.value} diproses`,
+    icon: 'confirmation_number',
+    route: '/ticketing',
+    tone: openTickets.value > 0 ? 'is-watch' : 'is-healthy'
+  },
+  {
+    key: 'overdue-followups',
+    label: 'Overdue Follow-up',
+    value: overdueFollowUps.value,
+    caption: `${dueTodayFollowUps.value} due today · ${urgentOpenFollowUps.value} urgent`,
+    icon: 'notification_important',
+    route: '/worklog',
+    tone: overdueFollowUps.value > 0 ? 'is-critical' : 'is-healthy'
+  },
+  {
+    key: 'asset-risk',
+    label: 'Asset Risk',
+    value: assetRiskCount.value,
+    caption: `${assetHealthPct.value}% asset healthy`,
+    icon: 'construction',
+    route: '/database-outlet',
+    tone: assetRiskCount.value > 0 ? 'is-risk' : 'is-healthy'
+  },
+  {
+    key: 'procurement-transit',
+    label: 'In Transit',
+    value: procurementInTransit.value,
+    caption: `${procurementHealthPct.value}% delivered`,
+    icon: 'local_shipping',
+    route: '/tracker-pengadaan',
+    tone: procurementInTransit.value > 0 ? 'is-watch' : 'is-healthy'
+  },
+  {
+    key: 'active-maintenance',
+    label: 'Active Maintenance',
+    value: activeMaintenanceCount.value,
+    caption: `${maintenanceHealthPct.value}% complete`,
+    icon: 'handyman',
+    route: '/maintenance',
+    tone: activeMaintenanceCount.value > 0 ? 'is-watch' : 'is-healthy'
+  }
+])
 
-const ticketSpill = computed(() => pickRotating(ticketSpills.value))
-const maintenanceSpill = computed(() => pickRotating(maintenanceSpills.value))
-const pengadaanSpill = computed(() => pickRotating(pengadaanSpills.value))
 
 // Outlet distribution data
 const outletDistribution = computed(() => {
@@ -515,6 +649,151 @@ function ticketIconStyle(status) {
 </script>
 
 <style scoped>
+
+.ops-kpi-section {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.35fr) repeat(5, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.ops-health-card,
+.ops-kpi-card {
+  background: var(--color-surface-container-lowest);
+  border: 1px solid rgba(116, 119, 121, 0.14);
+  box-shadow: 0 10px 26px rgba(44, 47, 49, 0.06);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ops-health-card {
+  border-radius: 1rem;
+  cursor: pointer;
+  padding: 1.15rem 1.25rem;
+}
+.ops-health-card:hover,
+.ops-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgba(44, 47, 49, 0.09);
+}
+.ops-health-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.ops-eyebrow,
+.ops-kpi-label {
+  font-family: var(--font-family-mono);
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+}
+.ops-health-score {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+.ops-health-score span {
+  font-size: 2.15rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--color-on-surface);
+}
+.ops-health-score small {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--color-on-surface-variant);
+}
+.ops-health-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 87, 190, 0.1);
+  color: var(--color-primary);
+}
+.ops-progress-track {
+  height: 8px;
+  overflow: hidden;
+  margin: 1rem 0 0.8rem;
+  border-radius: 9999px;
+  background: var(--color-surface-container-high);
+}
+.ops-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0057be, #059669);
+  transition: width 0.35s ease;
+}
+.ops-health-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.ops-health-breakdown span {
+  padding: 0.18rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-surface-container-low);
+  color: var(--color-on-surface-variant);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+.ops-kpi-card {
+  min-height: 132px;
+  border-radius: 0.9rem;
+  padding: 1rem;
+  border-left: 4px solid var(--color-outline-variant);
+  cursor: pointer;
+  font-family: var(--font-family-body);
+  color: var(--color-on-surface);
+  text-align: left;
+}
+.ops-kpi-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  background: var(--color-surface-container-low);
+  color: var(--color-primary);
+}
+.ops-kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ops-kpi-content strong {
+  font-size: 1.55rem;
+  line-height: 1;
+  font-weight: 900;
+}
+.ops-kpi-content small {
+  color: var(--color-on-surface-variant);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.ops-health-card.is-healthy,
+.ops-kpi-card.is-healthy { border-color: rgba(5, 150, 105, 0.26); }
+.ops-health-card.is-watch,
+.ops-kpi-card.is-watch { border-color: rgba(217, 119, 6, 0.28); }
+.ops-health-card.is-risk,
+.ops-kpi-card.is-risk { border-color: rgba(234, 88, 12, 0.3); }
+.ops-health-card.is-critical,
+.ops-kpi-card.is-critical { border-color: rgba(179, 27, 37, 0.3); }
+.ops-kpi-card.is-healthy .ops-kpi-icon { background: rgba(5, 150, 105, 0.1); color: #059669; }
+.ops-kpi-card.is-watch .ops-kpi-icon { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+.ops-kpi-card.is-risk .ops-kpi-icon { background: rgba(234, 88, 12, 0.1); color: #ea580c; }
+.ops-kpi-card.is-critical .ops-kpi-icon { background: rgba(179, 27, 37, 0.12); color: #b31b25; }
+.ops-health-card.is-healthy .ops-progress-fill { background: linear-gradient(90deg, #0057be, #059669); }
+.ops-health-card.is-watch .ops-progress-fill { background: linear-gradient(90deg, #0057be, #d97706); }
+.ops-health-card.is-risk .ops-progress-fill { background: linear-gradient(90deg, #d97706, #ea580c); }
+.ops-health-card.is-critical .ops-progress-fill { background: linear-gradient(90deg, #ea580c, #b31b25); }
+
 .kpi-legend {
   display: flex;
   flex-direction: column;
@@ -533,36 +812,22 @@ function ticketIconStyle(status) {
   border-radius: 50%;
   flex-shrink: 0;
 }
-.kpi-spill {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  margin-top: 0.875rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: 0.625rem;
-  background: var(--color-surface-container-low);
-  max-width: 15rem;
+
+@media (max-width: 1280px) {
+  .ops-kpi-section {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ops-health-card {
+    grid-column: span 3;
+  }
 }
-.kpi-spill .material-symbols-outlined {
-  font-size: 1rem;
-  color: var(--color-primary);
-  flex-shrink: 0;
-  margin-top: 0.0625rem;
+@media (max-width: 768px) {
+  .ops-kpi-section {
+    grid-template-columns: 1fr;
+  }
+  .ops-health-card {
+    grid-column: auto;
+  }
 }
-.kpi-spill strong {
-  display: block;
-  font-size: 0.6875rem;
-  line-height: 1.3;
-  color: var(--color-on-surface);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 12rem;
-}
-.kpi-spill p {
-  font-size: 0.625rem;
-  line-height: 1.35;
-  color: var(--color-on-surface-variant);
-  margin: 0.125rem 0 0;
-}
+
 </style>

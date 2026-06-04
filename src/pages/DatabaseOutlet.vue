@@ -39,7 +39,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="a in filtered" :key="a.kodeAset">
+          <tr v-for="a in paginatedFiltered" :key="a.kodeAset">
             <td class="mono-cell">{{ a.kodeAset }}</td>
             <td style="font-weight: 600;">{{ a.outlet }}</td>
             <td>{{ a.barang }}</td>
@@ -62,6 +62,12 @@
         </tbody>
       </table>
     </div>
+
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
 
     <!-- Modal -->
     <div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
@@ -118,9 +124,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useDataStore } from '@/stores/dataStore'
 
 const store = useDataStore()
@@ -129,9 +136,11 @@ const outletFilter = ref('Semua')
 const kondisiFilter = ref('Semua Kondisi')
 const showModal = ref(false)
 const editingItem = ref(null)
+const page = ref(1)
+const pageSize = ref(10)
 const form = ref({})
 
-const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage', 'Batununggal', 'Ciwastra']
 
 const filtered = computed(() => store.dbOutlet.filter(a => {
   const q = search.value.toLowerCase()
@@ -140,6 +149,13 @@ const filtered = computed(() => store.dbOutlet.filter(a => {
   const matchKondisi = kondisiFilter.value === 'Semua Kondisi' || a.kondisi === kondisiFilter.value
   return matchSearch && matchOutlet && matchKondisi
 }))
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, outletFilter, kondisiFilter, pageSize], () => { page.value = 1 })
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
 

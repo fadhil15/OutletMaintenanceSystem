@@ -76,6 +76,13 @@
               <span>Selesai: {{ tiketSelesai }}</span>
             </div>
           </div>
+          <div class="kpi-spill" v-if="ticketSpill">
+            <span class="material-symbols-outlined">{{ ticketSpill.icon }}</span>
+            <div>
+              <strong>{{ ticketSpill.title }}</strong>
+              <p>{{ ticketSpill.meta }}</p>
+            </div>
+          </div>
         </div>
         <div class="donut-chart">
           <svg viewBox="0 0 100 100">
@@ -111,22 +118,33 @@
         </div>
       </div>
 
-      <!-- Kondisi Aset -->
-      <div class="kpi-card" @click="$router.push('/database-outlet')">
+      <!-- Maintenance & Bisdev -->
+      <div class="kpi-card" @click="$router.push('/maintenance')">
         <div class="kpi-card-info">
-          <h3>Kondisi Aset</h3>
+          <h3>Maintenance &amp; Bisdev</h3>
           <div style="display: flex; align-items: baseline; gap: 0.375rem;">
-            <span class="value" style="color: var(--color-secondary);">{{ store.chartData.asetPct }}%</span>
-            <span class="label">Healthy</span>
+            <span class="value" style="color: var(--color-secondary);">{{ maintenanceActiveCount }}</span>
+            <span class="label">Active Projects</span>
           </div>
           <div class="kpi-legend" style="margin-top: 0.75rem;">
             <div class="legend-item">
-              <span class="legend-dot" style="background: #059669;"></span>
-              <span>Aktif: {{ store.stats.asetAktif }}</span>
+              <span class="legend-dot" style="background: #6b7280;"></span>
+              <span>To Do: {{ maintenanceTodo }}</span>
             </div>
             <div class="legend-item">
-              <span class="legend-dot" style="background: var(--color-error);"></span>
-              <span>Rusak: {{ store.stats.asetRusak }}</span>
+              <span class="legend-dot" style="background: #d97706;"></span>
+              <span>Sudah CO: {{ maintenanceSudahCO }}</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background: #0057be;"></span>
+              <span>Proses: {{ maintenanceProses }}</span>
+            </div>
+          </div>
+          <div class="kpi-spill" v-if="maintenanceSpill">
+            <span class="material-symbols-outlined">{{ maintenanceSpill.icon }}</span>
+            <div>
+              <strong>{{ maintenanceSpill.title }}</strong>
+              <p>{{ maintenanceSpill.meta }}</p>
             </div>
           </div>
         </div>
@@ -136,13 +154,27 @@
             <circle
               class="donut-fill"
               cx="50" cy="50" r="40"
-              :stroke="'#6a37d4'"
-              :stroke-dasharray="`${store.chartData.asetPct * 2.513} 251.3`"
-              stroke-dashoffset="0"
+              stroke="#6b7280"
+              :stroke-dasharray="`${maintenanceSegments.todo} 251.3`"
+              :stroke-dashoffset="0"
+            />
+            <circle
+              class="donut-fill"
+              cx="50" cy="50" r="40"
+              stroke="#d97706"
+              :stroke-dasharray="`${maintenanceSegments.sudahCO} 251.3`"
+              :stroke-dashoffset="-(maintenanceSegments.todo)"
+            />
+            <circle
+              class="donut-fill"
+              cx="50" cy="50" r="40"
+              stroke="#0057be"
+              :stroke-dasharray="`${maintenanceSegments.proses} 251.3`"
+              :stroke-dashoffset="-(maintenanceSegments.todo + maintenanceSegments.sudahCO)"
             />
           </svg>
           <div class="donut-center">
-            <span class="pct" style="color: var(--color-secondary);">{{ store.chartData.asetPct }}%</span>
+            <span class="pct" style="color: var(--color-secondary);">{{ maintenanceActiveCount }}</span>
           </div>
         </div>
       </div>
@@ -163,6 +195,13 @@
             <div class="legend-item">
               <span class="legend-dot" style="background: #0e7490;"></span>
               <span>Dikirim: {{ store.stats.dalamPengiriman }}</span>
+            </div>
+          </div>
+          <div class="kpi-spill" v-if="pengadaanSpill">
+            <span class="material-symbols-outlined">{{ pengadaanSpill.icon }}</span>
+            <div>
+              <strong>{{ pengadaanSpill.title }}</strong>
+              <p>{{ pengadaanSpill.meta }}</p>
             </div>
           </div>
         </div>
@@ -319,7 +358,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
@@ -540,47 +579,47 @@ const outletDistribution = computed(() => {
 const workflowSteps = [
   {
     id: 1,
-    icon: 'chat',
-    iconBg: 'rgba(16,185,129,0.1)',
-    iconColor: '#059669',
-    title: 'Lapor via WA',
-    desc: 'Admin outlet mengirim keluhan via WhatsApp Bot',
-    tag: 'TRIGGER ACTIVE',
-    tagBg: 'rgba(16,185,129,0.1)',
-    tagColor: '#059669',
-  },
-  {
-    id: 2,
-    icon: 'bolt',
+    icon: 'confirmation_number',
     iconBg: 'rgba(0,87,190,0.1)',
     iconColor: 'var(--color-primary)',
-    title: 'Ditangkap n8n',
-    desc: 'Automation engine memproses data ke database OMS',
-    tag: 'PROCESSING...',
+    title: 'Masuk Ticketing',
+    desc: 'Crew/SM input semua laporan, request, kerusakan, dan kebutuhan lewat Ticketing OMS.',
+    tag: 'SINGLE ENTRY',
     tagBg: 'rgba(0,87,190,0.1)',
     tagColor: 'var(--color-primary)',
   },
   {
-    id: 3,
-    icon: 'shopping_cart_checkout',
+    id: 2,
+    icon: 'rule',
     iconBg: 'rgba(106,55,212,0.1)',
     iconColor: 'var(--color-secondary)',
-    title: 'Checkout & Resi',
-    desc: 'Item diproses dan nomor resi kurir diterbitkan',
-    tag: 'WAITING LOGISTICS',
-    tagBg: 'var(--color-surface-container-high)',
-    tagColor: 'var(--color-on-surface-variant)',
+    title: 'Screening Kebutuhan',
+    desc: 'Admin/Bizdev cek apakah tiket cukup diselesaikan, butuh equipment, maintenance, atau keduanya.',
+    tag: 'TRIAGE',
+    tagBg: 'rgba(106,55,212,0.1)',
+    tagColor: 'var(--color-secondary)',
+  },
+  {
+    id: 3,
+    icon: 'local_shipping',
+    iconBg: 'rgba(0,101,118,0.1)',
+    iconColor: 'var(--color-tertiary)',
+    title: 'Pengadaan Jika Equipment',
+    desc: 'Jika butuh equipment, masuk Tracker Pengadaan untuk CO, resi, pengiriman, sampai diterima outlet.',
+    tag: 'PROCUREMENT',
+    tagBg: 'rgba(0,101,118,0.1)',
+    tagColor: 'var(--color-tertiary)',
   },
   {
     id: 4,
-    icon: 'inventory',
-    iconBg: 'rgba(0,101,118,0.1)',
-    iconColor: 'var(--color-tertiary)',
-    title: 'Barang Tiba',
-    desc: 'Admin konfirmasi penerimaan dan update status aset',
-    tag: 'FINAL VALIDATION',
-    tagBg: 'var(--color-surface-container-high)',
-    tagColor: 'var(--color-on-surface-variant)',
+    icon: 'build',
+    iconBg: 'rgba(217,119,6,0.1)',
+    iconColor: '#d97706',
+    title: 'Maintenance / Closing',
+    desc: 'Jika maintenance tanpa barang, langsung ke Maintenance. Jika perlu barang, lanjut setelah pengadaan siap.',
+    tag: 'EXECUTE & CLOSE',
+    tagBg: 'rgba(217,119,6,0.1)',
+    tagColor: '#d97706',
   },
 ]
 

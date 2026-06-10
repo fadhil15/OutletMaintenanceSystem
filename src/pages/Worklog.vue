@@ -187,7 +187,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="w in filtered"
+            v-for="w in paginatedFiltered"
             :key="w.idLog"
             class="wl-row"
             :class="{ 'wl-row-urgent': w.prioritas === 'Urgent' }"
@@ -266,6 +266,12 @@
       </table>
     </div>
 
+    <PaginationControls
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      :total="filtered.length"
+    />
+
     <!-- Worklog Form Modal -->
     <WorklogForm
       v-if="showFormModal"
@@ -310,10 +316,11 @@
 </template>
 
 <script setup>
-import { ref, computed, inject, onMounted } from 'vue'
+import { ref, computed, inject, onMounted, watch } from 'vue'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import WorklogForm from '@/components/worklog/WorklogForm.vue'
 import WorklogDetailDrawer from '@/components/worklog/WorklogDetailDrawer.vue'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
 import { useWorklog } from '@/composables/useWorklog'
 import {
   WORKLOG_ACTIVITY_TYPES,
@@ -336,6 +343,8 @@ const filterPrioritas = ref('')
 const filterStatus = ref('')
 const filterTanggal = ref('')
 const activeQuickFilter = ref('all')
+const page = ref(1)
+const pageSize = ref(10)
 
 const showFormModal = ref(false)
 const editingWorklog = ref(null)
@@ -483,6 +492,13 @@ const filtered = computed(() => {
 
   return data
 })
+
+const paginatedFiltered = computed(() => {
+  const start = (page.value - 1) * pageSize.value
+  return filtered.value.slice(start, start + pageSize.value)
+})
+
+watch([search, filterTipe, filterModul, filterOutlet, filterPrioritas, filterStatus, filterTanggal, activeQuickFilter, pageSize], () => { page.value = 1 })
 
 // Priority sort rank: overdue=0, dueToday=1, urgent=2, else=3
 function getReminderRank(w) {

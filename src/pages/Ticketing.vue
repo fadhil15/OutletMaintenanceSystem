@@ -17,14 +17,25 @@
         <span class="material-symbols-outlined">search</span>
         <input v-model="search" type="text" placeholder="Cari tiket..." />
       </div>
-      <div class="filter-pills" style="flex: 1;">
-        <button
-          v-for="o in ['Semua', ...OUTLETS]"
-          :key="o"
-          class="pill"
-          :class="{ active: outletFilter === o }"
-          @click="outletFilter = o"
-        >{{ o }}</button>
+      <div class="ticket-filter-stack">
+        <div class="filter-pills">
+          <button
+            v-for="o in ['Semua', ...TICKETING_OUTLETS]"
+            :key="o"
+            class="pill"
+            :class="{ active: outletFilter === o }"
+            @click="outletFilter = o"
+          >{{ o }}</button>
+        </div>
+        <div class="filter-pills ticket-status-pills" aria-label="Filter status tiket">
+          <button
+            v-for="status in ['Semua Status', ...TICKETING_STATUSES]"
+            :key="status"
+            class="pill"
+            :class="{ active: statusFilter === status }"
+            @click="statusFilter = status"
+          >{{ status }}</button>
+        </div>
       </div>
     </div>
 
@@ -61,6 +72,14 @@
                   <span class="material-symbols-outlined" style="font-size:0.75rem;">local_shipping</span>
                   {{ linkedPengadaan(t.id).length }}
                 </span>
+                <span
+                  v-if="linkedMaintenance(t.id).length > 0"
+                  class="linked-badge linked-maintenance"
+                  :title="'Terhubung ke ' + linkedMaintenance(t.id).length + ' maintenance'"
+                >
+                  <span class="material-symbols-outlined" style="font-size:0.75rem;">handyman</span>
+                  {{ linkedMaintenance(t.id).length }}
+                </span>
               </div>
             </td>
             <td style="white-space: nowrap; color: var(--color-on-surface-variant); font-size: 0.75rem;">{{ formatDate(t.waktu) }}</td>
@@ -74,7 +93,7 @@
               </a>
               <span v-else style="color: var(--color-on-surface-variant); font-size: 0.75rem;">—</span>
             </td>
-            <td><StatusBadge :status="t.status" /></td>
+            <td><StatusBadge :status="normalizeTicketStatus(t.status)" /></td>
             <td style="font-size: 0.8125rem;">{{ t.pic || '—' }}</td>
             <td>
               <div class="action-btns">
@@ -101,20 +120,22 @@
         <form @submit.prevent="saveItem">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem;">
             <div class="form-group">
-              <label class="form-label">ID Tiket</label>
-              <input class="form-input" v-model="form.id" placeholder="TKT-XXXX-001" required />
-            </div>
-            <div class="form-group">
               <label class="form-label">Waktu Lapor</label>
               <input class="form-input" v-model="form.waktu" type="date" required />
             </div>
-          </div>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem;">
             <div class="form-group">
               <label class="form-label">Outlet</label>
               <select class="form-select form-input" v-model="form.outlet" required>
                 <option value="">Pilih outlet</option>
-                <option v-for="o in OUTLETS" :key="o">{{ o }}</option>
+                <option v-for="o in TICKETING_OUTLETS" :key="o">{{ o }}</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.875rem;">
+            <div class="form-group">
+              <label class="form-label">Tipe Proses</label>
+              <select class="form-select form-input" v-model="form.prosesTiket" required>
+                <option v-for="type in TICKETING_PROCESS_TYPES" :key="type">{{ type }}</option>
               </select>
             </div>
             <div class="form-group">
@@ -125,6 +146,11 @@
                 <option>Selesai</option>
               </select>
             </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ID Tiket Otomatis</label>
+            <input class="form-input ticket-id-preview" :value="form.id || 'Pilih outlet dan tanggal lapor dulu'" readonly />
+            <small class="form-hint">Format: kode outlet-tanggal-urutan, contoh KPO-6102026-002.</small>
           </div>
           <div class="form-group">
             <label class="form-label">Nama Barang</label>
@@ -164,6 +190,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import StatusBadge from '@/components/shared/StatusBadge.vue'
 import { useDataStore } from '@/stores/dataStore'
 import { useWorklog } from '@/composables/useWorklog'
+import { TICKETING_OUTLETS, TICKETING_STATUSES, TICKETING_PROCESS_TYPES } from '@/constants/ticketing'
 
 const store = useDataStore()
 const route = useRoute()
@@ -171,13 +198,25 @@ const { createAutoWorklog } = useWorklog()
 const addToast = inject('addToast', () => {})
 const search = ref('')
 const outletFilter = ref('Semua')
+const statusFilter = ref('Semua Status')
 const showModal = ref(false)
 const editingItem = ref(null)
 const form = ref({})
 const highlightId = ref(route.query.highlight || null)
 const highlightRef = ref(null)
 
-const OUTLETS = ['Antapani', 'Arcamanik', 'Cianjur', 'Cirebon', 'Ayam Mirasa', 'Suci', 'Kopo', 'Gedebage']
+
+function normalizeTicketStatus(status) {
+  const raw = String(status || '').trim()
+  const compact = raw.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ')
+
+  if (!compact) return 'Pending'
+  if (compact.includes('selesai') || compact.includes('done') || compact.includes('complete')) return 'Selesai'
+  if (compact.includes('proses') || compact.includes('process') || compact.includes('progress')) return 'Sedang Diproses'
+  if (compact.includes('pending') || compact.includes('open') || compact.includes('baru')) return 'Pending'
+
+  return raw
+}
 
 // Scroll to highlighted row on mount
 onMounted(async () => {
@@ -207,18 +246,121 @@ watch(() => route.query.highlight, async (val) => {
   }
 })
 
+watch(
+  () => [form.value.outlet, form.value.waktu, form.value.prosesTiket],
+  () => {
+    if (!editingItem.value) assignGeneratedTicketId()
+  }
+)
+
 // Find pengadaan entries linked to a ticket
 function linkedPengadaan(ticketId) {
   return store.pengadaan.filter(p => p.idTiket && p.idTiket.trim() === ticketId.trim())
 }
 
+function linkedMaintenance(ticketId) {
+  const id = String(ticketId || '').trim()
+  return store.maintenance.filter(m => String(m.id || '').trim() === id)
+}
 
+const OUTLET_CODES = {
+  Antapani: 'ATP',
+  Arcamanik: 'ARC',
+  Cianjur: 'CJR',
+  Cirebon: 'CRB',
+  'Ayam Mirasa': 'AMR',
+  Suci: 'SCI',
+  Kopo: 'KPO',
+  Gedebage: 'GDB',
+  Batununggal: 'BTN',
+  Ciwastra: 'CWS'
+}
+
+function outletCode(outlet) {
+  if (OUTLET_CODES[outlet]) return OUTLET_CODES[outlet]
+  return String(outlet || '')
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 3) || 'OTL'
+}
+
+function ticketDateCode(dateValue) {
+  if (!dateValue) return ''
+  const raw = String(dateValue).trim()
+  const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+  if (iso) return `${Number(iso[3])}${Number(iso[2])}${iso[1]}`
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getDate()}${date.getMonth() + 1}${date.getFullYear()}`
+}
+
+function nextTicketSequence(prefix, dateCode, currentId = '') {
+  const base = `${prefix}-${dateCode}-`
+  const sequences = store.ticketing
+    .map(t => String(t.id || ''))
+    .filter(id => id.startsWith(base) && id !== currentId)
+    .map(id => Number(id.slice(base.length)))
+    .filter(Number.isFinite)
+
+  return Math.max(0, ...sequences) + 1
+}
+
+function generateTicketId(outlet, dateValue, currentId = '') {
+  if (!outlet || !dateValue) return ''
+  const prefix = outletCode(outlet)
+  const dateCode = ticketDateCode(dateValue)
+  const sequence = nextTicketSequence(prefix, dateCode, currentId)
+  return `${prefix}-${dateCode}-${String(sequence).padStart(3, '0')}`
+}
+
+function assignGeneratedTicketId() {
+  if (!form.value) return
+  const generatedId = generateTicketId(form.value.outlet, form.value.waktu, form.value.id)
+  if (generatedId) form.value.id = generatedId
+}
+
+function createLinkedMaintenanceFromTicket(ticket) {
+  if (linkedMaintenance(ticket.id).length > 0) return
+
+  const maintenanceItem = {
+    id: ticket.id,
+    cabang: ticket.outlet,
+    kategori: 'Maintenance',
+    pekerjaan: ticket.barang || ticket.kendala || 'Maintenance dari tiket',
+    status: 'To Do',
+    startDate: ticket.waktu,
+    endDate: '',
+    pic: ticket.pic || ''
+  }
+
+  store.maintenance.push(maintenanceItem)
+  store.sendToAppsScript({
+    action: 'add',
+    sheet: 'maintenance',
+    data: [maintenanceItem.id, maintenanceItem.cabang, maintenanceItem.kategori, maintenanceItem.pekerjaan, maintenanceItem.status, maintenanceItem.startDate, maintenanceItem.endDate, maintenanceItem.pic]
+  })
+
+  createAutoWorklog({
+    tipeAktivitas: 'Maintenance',
+    modulTerkait: 'Maintenance',
+    referensiId: maintenanceItem.id,
+    outletCabang: maintenanceItem.cabang,
+    judulAktivitas: 'Tiket maintenance otomatis dibuat',
+    catatanDetail: `Tiket ${ticket.id} dibuat sebagai pekerjaan maintenance.\nPekerjaan: ${maintenanceItem.pekerjaan}\nKendala: ${ticket.kendala || '-'}`,
+    pic: maintenanceItem.pic,
+    prioritas: 'Medium',
+    statusFollowUp: 'Open'
+  })
+}
 
 const filtered = computed(() => store.ticketing.filter(t => {
   const q = search.value.toLowerCase()
-  const matchSearch = !q || [t.id, t.outlet, t.barang, t.kendala, t.pic].join(' ').toLowerCase().includes(q)
+  const normalizedStatus = normalizeTicketStatus(t.status)
+  const matchSearch = !q || [t.id, t.outlet, t.barang, t.kendala, t.pic, normalizedStatus].join(' ').toLowerCase().includes(q)
   const matchOutlet = outletFilter.value === 'Semua' || t.outlet === outletFilter.value
-  return matchSearch && matchOutlet
+  const matchStatus = statusFilter.value === 'Semua Status' || normalizedStatus === statusFilter.value
+  return matchSearch && matchOutlet && matchStatus
 }))
 
 function formatDate(d) { return d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' }
@@ -227,17 +369,24 @@ function truncate(str, max) { return str && str.length > max ? str.slice(0, max)
 function openModal(item = null) {
   editingItem.value = item
   const today = new Date().toISOString().split('T')[0]
-  form.value = item ? { ...item } : { id: '', waktu: today, outlet: '', barang: '', kendala: '', foto: '', linkCO: '', status: 'Pending', pic: '' }
+  form.value = item
+    ? { prosesTiket: linkedMaintenance(item.id).length > 0 ? 'Maintenance' : 'Pengadaan', ...item }
+    : { id: '', waktu: today, outlet: '', prosesTiket: 'Pengadaan', barang: '', kendala: '', foto: '', linkCO: '', status: 'Pending', pic: '' }
+  if (!item) assignGeneratedTicketId()
   showModal.value = true
 }
 function saveItem() {
   const isEditing = !!editingItem.value
-  const oldStatus = isEditing ? editingItem.value.status : null
+  if (!isEditing) assignGeneratedTicketId()
+  const oldStatus = isEditing ? normalizeTicketStatus(editingItem.value.status) : null
+  const ticketPayload = { ...form.value }
+  delete ticketPayload.prosesTiket
+
   if (isEditing) {
     const idx = store.ticketing.findIndex(i => i.id === editingItem.value.id)
-    if (idx !== -1) store.ticketing[idx] = { ...form.value }
+    if (idx !== -1) store.ticketing[idx] = ticketPayload
   } else {
-    store.ticketing.push({ ...form.value })
+    store.ticketing.push(ticketPayload)
   }
   store.sendToAppsScript({
     action: isEditing ? 'update' : 'add',
@@ -253,14 +402,19 @@ function saveItem() {
       referensiId: form.value.id,
       outletCabang: form.value.outlet,
       judulAktivitas: 'Tiket baru dibuat',
-      catatanDetail: `Barang: ${form.value.barang}\nKendala: ${form.value.kendala || '-'}`,
+      catatanDetail: `Tipe Proses: ${form.value.prosesTiket}\nBarang: ${form.value.barang}\nKendala: ${form.value.kendala || '-'}`,
       pic: form.value.pic || '',
-      prioritas: form.value.status === 'Pending' ? 'High' : 'Medium',
+      prioritas: normalizeTicketStatus(form.value.status) === 'Pending' ? 'High' : 'Medium',
       statusFollowUp: 'Open'
     })
+
+    if (form.value.prosesTiket === 'Maintenance') {
+      createLinkedMaintenanceFromTicket(form.value)
+      addToast('Tiket maintenance otomatis masuk ke modul Maintenance', 'success')
+    }
   }
   // Auto worklog — ticket completed (guard: old !== new)
-  if (isEditing && form.value.status === 'Selesai' && oldStatus !== 'Selesai') {
+  if (isEditing && normalizeTicketStatus(form.value.status) === 'Selesai' && oldStatus !== 'Selesai') {
     createAutoWorklog({
       tipeAktivitas: 'Update Status',
       modulTerkait: 'Ticketing',
@@ -287,10 +441,23 @@ function deleteItem(id) {
 </script>
 
 <style scoped>
-.toolbar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.toolbar { display: flex; align-items: flex-start; gap: 0.75rem; flex-wrap: wrap; }
+.ticket-filter-stack { display: flex; flex: 1; flex-direction: column; gap: 0.5rem; min-width: min(100%, 320px); }
+.ticket-status-pills .pill { font-size: 0.6875rem; }
 .toolbar-search { position: relative; flex: 0 0 200px; }
 .toolbar-search .material-symbols-outlined { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--color-on-surface-variant); font-size: 1rem; }
 .toolbar-search input { width: 100%; padding: 0.5rem 0.75rem 0.5rem 2.25rem; background: var(--color-surface-container-highest); border: none; border-radius: 0.5rem; font-size: 0.875rem; font-family: var(--font-family-body); color: var(--color-on-surface); outline: none; }
+.ticket-id-preview {
+  font-family: var(--font-family-mono);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.form-hint {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--color-on-surface-variant);
+  font-size: 0.6875rem;
+}
 .photo-link { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.75rem; color: var(--color-primary); text-decoration: none; font-weight: 600; }
 .photo-link:hover { text-decoration: underline; }
 
@@ -319,5 +486,10 @@ function deleteItem(id) {
   font-weight: 800;
   cursor: default;
   white-space: nowrap;
+}
+.linked-maintenance {
+  background: rgba(0, 87, 190, 0.12);
+  color: var(--color-primary);
+  border-color: rgba(0, 87, 190, 0.25);
 }
 </style>

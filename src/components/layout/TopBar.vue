@@ -37,18 +37,17 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-const props = defineProps({
+defineProps({
   placeholder: {
     type: String,
     default: 'Search outlet, asset, or ticket...'
   }
 })
 
-const emit = defineEmits(['search'])
+defineEmits(['search'])
 const searchQuery = ref('')
-
-import { useRouter } from 'vue-router'
 const router = useRouter()
 
 function handleLogout() {

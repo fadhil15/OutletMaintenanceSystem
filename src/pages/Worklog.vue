@@ -12,6 +12,38 @@
       </button>
     </div>
 
+    <!-- TAL Lark Table Embed -->
+    <section class="wl-tal-card" aria-labelledby="tal-table-title">
+      <div class="wl-tal-header">
+        <div class="wl-tal-heading">
+          <span class="wl-tal-mark" aria-hidden="true">TAL</span>
+          <div>
+            <h3 id="tal-table-title">Tabel Akses TAL</h3>
+            <p>Live view dari Lark untuk monitoring TAL yang tersambung langsung.</p>
+          </div>
+        </div>
+        <a
+          class="wl-tal-open"
+          :href="talLarkTableUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Buka tabel akses TAL di Lark"
+        >
+          <span aria-hidden="true">↗</span>
+          Buka Lark
+        </a>
+      </div>
+      <div class="wl-tal-frame-wrap">
+        <iframe
+          class="wl-tal-frame"
+          :src="talLarkTableUrl"
+          title="Tabel akses TAL di Lark"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+        ></iframe>
+      </div>
+    </section>
+
     <!-- Summary Cards -->
     <div class="wl-summary-grid">
       <div class="wl-summary-card">
@@ -293,6 +325,7 @@ import {
 
 const { worklogs, isLoading, error, fetchWorklogs, addWorklog, updateWorklog, deleteWorklog, markWorklogAsDone, todayFocus } = useWorklog()
 const addToast = inject('addToast', () => {})
+const talLarkTableUrl = 'https://ujpdwqpe82rz.jp.larksuite.com/wiki/D6OvwUIDkiKIM4kfBBZjT3F3pfc?sheet=Dx6hMA'
 
 // ─── State ───
 const search = ref('')
@@ -564,6 +597,92 @@ async function handleDelete() {
 </script>
 
 <style scoped>
+/* ─── TAL Lark Embed ─── */
+.wl-tal-card {
+  background: linear-gradient(180deg, var(--color-surface-container-lowest) 0%, rgba(255, 255, 255, 0.92) 100%);
+  border: 1px solid rgba(0, 87, 190, 0.12);
+  border-radius: 1rem;
+  box-shadow: 0 12px 30px rgba(44, 47, 49, 0.06);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+.wl-tal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-surface-container-high);
+}
+.wl-tal-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+.wl-tal-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 87, 190, 0.1);
+  color: var(--color-primary);
+  flex-shrink: 0;
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.wl-tal-heading h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-on-surface);
+  line-height: 1.2;
+}
+.wl-tal-heading p {
+  margin-top: 0.125rem;
+  font-size: 0.8125rem;
+  color: var(--color-on-surface-variant);
+}
+.wl-tal-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(0, 87, 190, 0.1);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.wl-tal-open:hover {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  transform: translateY(-1px);
+}
+.wl-tal-open span {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.wl-tal-frame-wrap {
+  background: var(--color-surface-container-low);
+  height: clamp(320px, 44vh, 520px);
+  min-height: 320px;
+}
+.wl-tal-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: white;
+}
+
 /* ─── Summary ─── */
 .wl-summary-grid {
   display: grid;
@@ -950,6 +1069,16 @@ async function handleDelete() {
   .wl-today-focus {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .wl-tal-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .wl-tal-open {
+    width: 100%;
+  }
+  .wl-tal-frame-wrap {
+    height: 360px;
   }
 }
 @media (max-width: 480px) {

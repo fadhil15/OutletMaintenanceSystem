@@ -17,3 +17,5 @@ export const TICKETING_OUTLETS = [
 ]
 
 export const TICKETING_STATUSES = ['Pending', 'Sedang Diproses', 'Selesai']
+
+export const TICKETING_PROCESS_TYPES = ['Pengadaan', 'Maintenance']
